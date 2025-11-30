@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Plus, Save, Copy, Trash2, Box, Check, 
-  ChevronDown, Package, Sun, Moon 
+  ChevronDown, Package, Sun, Moon, X 
 } from 'lucide-react';
 
 // --- КОНФИГУРАЦИЯ ПО УМОЛЧАНИЮ (Коэффициенты) ---
@@ -61,26 +61,32 @@ const LAYERS = {
 export default function PackagingCalculator() {
   // --- STATE ---
   const [isDarkMode, setIsDarkMode] = useState(() => {
-      if (typeof window !== 'undefined') {
-          return localStorage.getItem('theme') === 'dark';
-      }
-      return false;
+      try {
+          const saved = localStorage.getItem('theme');
+          return saved === 'dark';
+      } catch (e) { return false; }
   });
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
   
+  // Временное имя для нового товара
+  const [tempName, setTempName] = useState('');
+  // Поле импорта
+  const [importText, setImportText] = useState('');
+
   const [inputs, setInputs] = useState({
-    name: '',
     len: 15, wid: 15, hgt: 7, wgt: 0.45, qty: 1,
-    layer1: 'thermo', layer2: 'vpp1', kiz: false
+    layer1: 'thermo', layer2: 'vpp1', kiz: false,
+    customCost: 0
   });
 
   const [skus, setSkus] = useState([]);
   const [activeSkuId, setActiveSkuId] = useState(null);
   
+  // Расчетные значения
   const [results, setResults] = useState({
-    workThermo: 0, workVpp: 0, workOther: 0, workKiz: 0,
+    workThermo: 0, workVpp: 0, workOther: 0, workKiz: 0, workCustom: 0,
     matThermo: 0, matVpp: 0, matOther: 0,
     totalUnit: 0, totalBatch: 0,
     vol: 0, sumWH: 0, badge: ''
@@ -132,7 +138,7 @@ export default function PackagingCalculator() {
 
   // --- ОСНОВНОЙ РАСЧЕТ ---
   useEffect(() => {
-    const { len, wid, hgt, wgt, qty, layer1, layer2, kiz } = inputs;
+    const { len, wid, hgt, wgt, qty, layer1, layer2, kiz, customCost } = inputs;
     
     const dims = [Number(len), Number(wid), Number(hgt)].sort((a, b) => b - a);
     const L = dims[0];
@@ -146,7 +152,10 @@ export default function PackagingCalculator() {
     const isFlat = H <= 2;
     const isNarrowLong = L >= 20 && (W + H) <= 15 && vol > 900;
 
-    let costWorkThermo = 0, costWorkVpp = 0, costWorkOther = 0, costWorkKiz = kiz ? 10 : 0;
+    let costWorkThermo = 0, costWorkVpp = 0, costWorkOther = 0;
+    let costWorkKiz = kiz ? 10 : 0;
+    let costWorkCustom = customCost || 0;
+
     let costMatThermo = 0, costMatVpp = 0, costMatOther = 0;
 
     // 1. ТЕРМОУСАДКА (РАБОТА)
@@ -156,8 +165,9 @@ export default function PackagingCalculator() {
 
     const srvThreshold = 500;
     let volumeSurcharge = 0;
+    
+    // Наценка за объем термоусадки
     const chargeableVol = Math.max(0, vol - srvThreshold);
-
     if (chargeableVol > 0) {
       if (isNarrowLong) {
         volumeSurcharge = chargeableVol * settings.srv_r_narrow;
@@ -254,18 +264,21 @@ export default function PackagingCalculator() {
       costMatVpp = (layer2 === 'vpp2') ? rawMat * 2 : rawMat;
     }
 
-    const totalUnit = costWorkThermo + costWorkVpp + costWorkOther + costWorkKiz + costMatThermo + costMatVpp + costMatOther;
+    const totalUnit = costWorkThermo + costWorkVpp + costWorkOther + costWorkKiz + costWorkCustom + costMatThermo + costMatVpp + costMatOther;
     const badge = isNano ? "NANO" : (isNarrowLong ? "NARROW" : (isFlat ? "FLAT" : "STD"));
 
     setResults({
-      workThermo: costWorkThermo, workVpp: costWorkVpp, workOther: costWorkOther, workKiz: costWorkKiz,
+      workThermo: costWorkThermo, workVpp: costWorkVpp, workOther: costWorkOther, workKiz: costWorkKiz, workCustom: costWorkCustom,
       matThermo: costMatThermo, matVpp: costMatVpp, matOther: costMatOther,
       totalUnit, totalBatch: totalUnit * qty,
       vol, sumWH, badge
     });
     
+    // Если редактируем товар, обновляем его цену в списке в реальном времени
     if (activeSkuId) {
-      setSkus(prev => prev.map(sku => sku.id === activeSkuId ? { ...sku, totalBatch: totalUnit * qty } : sku));
+      setSkus(prev => prev.map(sku => 
+        sku.id === activeSkuId ? { ...sku, totalBatch: totalUnit * qty } : sku
+      ));
     }
 
   }, [inputs, settings, activeSkuId]);
@@ -275,53 +288,79 @@ export default function PackagingCalculator() {
   const generateName = (base) => {
     const root = base || "Товар";
     
-    if (root === "Товар") {
+    // Автонумерация если имя не уникально или дефолтное
+    if (root === "Товар" || skus.some(s => s.name === root)) {
         let maxIdx = 0;
+        // Ищем максимальный номер среди "Товар #N" или "root #N"
+        const regex = new RegExp(`^${root} #(\\d+)$`);
+        
         skus.forEach(s => {
-            let m = s.name.match(/^Товар #(\d+)$/);
+            let m = s.name.match(regex);
+            // Если имя просто "Товар", считаем его как #1, если не занято
+            if (s.name === root) {
+               if(maxIdx < 1) maxIdx = 1;
+            }
             if (m) {
                 let idx = parseInt(m[1]);
                 if (idx > maxIdx) maxIdx = idx;
             }
         });
-        return `Товар #${maxIdx + 1}`;
+        return `${root} #${maxIdx + 1}`;
     }
-    
-    if (!skus.some(s => s.name === root)) return root;
-    
-    let counter = 1;
-    while (skus.some(s => s.name === `${root} (${counter})`)) {
-      counter++;
+    return root;
+  };
+
+  // Обновить имя в списке при вводе
+  const handleNameChange = (e) => {
+    const val = e.target.value;
+    setTempName(val);
+    if (activeSkuId) {
+       setSkus(prev => prev.map(s => s.id === activeSkuId ? {...s, name: val} : s));
     }
-    return `${root} (${counter})`;
   };
 
   const handleAdd = () => {
-    const name = generateName(inputs.name || "Товар");
+    const name = generateName(tempName || "Товар");
     const newSku = { ...inputs, name, id: Date.now(), totalBatch: results.totalBatch };
     setSkus([...skus, newSku]);
-    setInputs(prev => ({...prev, name: ''})); 
+    setTempName(''); // Сброс поля имени
+    // Мы остаемся в режиме песочницы
   };
 
   const handleSave = () => {
     if (!activeSkuId) return;
-    setSkus(prev => prev.map(sku => sku.id === activeSkuId ? { ...inputs, id: activeSkuId, totalBatch: results.totalBatch } : sku));
+    // При сохранении просто обновляем данные (они и так обновляются реактивно, но это "фиксация" для пользователя)
+    // По сути кнопка нужна для выхода из режима редактирования или просто визуального подтверждения
+    // Можно сделать выход:
+    // exitEditMode();
+    // Но пользователь просил "Сохранить" изменения в текущем. React state уже сделал это.
   };
 
   const handleDuplicate = () => {
     if (!activeSkuId) return;
     const currentSku = skus.find(s => s.id === activeSkuId);
-    const name = generateName((currentSku?.name || "Товар") + " (Копия)");
-    const newSku = { ...inputs, name, id: Date.now(), totalBatch: results.totalBatch };
+    if (!currentSku) return;
+
+    const baseName = currentSku.name.replace(/ \(Копия\d*\)$/, ""); // убрать старые копии
+    const name = generateName(baseName + " (Копия)");
+    
+    const newSku = { ...currentSku, ...inputs, name, id: Date.now(), totalBatch: results.totalBatch };
     setSkus([...skus, newSku]);
+    
+    // Переключаемся на дубликат
     setActiveSkuId(newSku.id); 
+    setTempName(newSku.name);
   };
 
   const loadSku = (id) => {
     const sku = skus.find(s => s.id === id);
     if (sku) {
       setActiveSkuId(id);
-      setInputs(sku);
+      setInputs({
+          len: sku.len, wid: sku.wid, hgt: sku.hgt, wgt: sku.wgt, qty: sku.qty,
+          layer1: sku.layer1, layer2: sku.layer2, kiz: sku.kiz, customCost: sku.customCost
+      });
+      setTempName(sku.name);
     }
   };
 
@@ -333,22 +372,24 @@ export default function PackagingCalculator() {
 
   const exitEditMode = () => {
     setActiveSkuId(null);
-    setInputs(prev => ({ ...prev, name: '' }));
+    setTempName('');
+    // Оставляем инпуты как есть (последние значения) или сбрасываем?
+    // Обычно удобнее оставить, чтобы продолжить создавать похожее.
   };
 
-  const handleParseImport = (text) => {
-    const lines = text.split('\n');
+  const handleParseImport = () => {
+    const lines = importText.split('\n');
     const newSkus = [];
+    
+    // Определяем текущий индекс для авто-имен
     let maxIdx = 0;
     skus.forEach(s => {
         let m = s.name.match(/^Товар #(\d+)$/);
-        if (m) {
-            let idx = parseInt(m[1]);
-            if (idx > maxIdx) maxIdx = idx;
-        }
+        if (m) maxIdx = Math.max(maxIdx, parseInt(m[1]));
     });
 
     lines.forEach(line => {
+       if (!line.trim()) return;
        const nums = line.match(/[0-9]+([.,][0-9]+)?/g);
        if (nums && nums.length >= 3) {
          const p = nums.map(n => parseFloat(n.replace(',', '.')));
@@ -358,16 +399,21 @@ export default function PackagingCalculator() {
             name: `Товар #${maxIdx}`,
             len: p[0], wid: p[1], hgt: p[2],
             wgt: p.length > 3 ? p[3] : 0.1,
-            qty: 1, layer1: 'thermo', layer2: 'none', kiz: false,
+            qty: 1, layer1: 'thermo', layer2: 'vpp1', kiz: false, customCost: 0,
             totalBatch: 0 
          });
        }
     });
-    setSkus([...skus, ...newSkus]);
+    
+    if (newSkus.length > 0) {
+        setSkus([...skus, ...newSkus]);
+        setImportText('');
+    }
   };
 
-  const totalWork = results.workThermo + results.workVpp + results.workOther + results.workKiz;
+  const totalWork = results.workThermo + results.workVpp + results.workOther + results.workKiz + results.workCustom;
   const totalMat = results.matThermo + results.matVpp + results.matOther;
+  const grandTotalBatch = skus.reduce((sum, sku) => sum + (sku.totalBatch || 0), 0);
   
   let errorMsg = null;
   if (inputs.layer2 !== 'none' && ['none', 'rubber'].includes(inputs.layer1)) {
@@ -383,8 +429,8 @@ export default function PackagingCalculator() {
       <div className="max-w-7xl mx-auto h-screen p-4 md:p-8 flex flex-col md:flex-row gap-6">
         
         {/* LEFT: Calculator */}
-        <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 custom-scroll">
-          <div className={`rounded-xl shadow-lg p-6 border transition-colors ${isDarkMode ? 'bg-black border-neutral-800' : 'bg-white border-gray-200'}`}>
+        <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 no-scrollbar">
+          <div className={`rounded-xl shadow-lg p-6 border transition-colors ${isDarkMode ? 'bg-[#171717] border-neutral-800' : 'bg-white border-gray-200'}`}>
             
             {/* HEADER */}
             <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4 ${isDarkMode ? 'border-neutral-800' : 'border-gray-200'}`}>
@@ -393,28 +439,28 @@ export default function PackagingCalculator() {
                 
                 <button 
                     onClick={() => setIsDarkMode(!isDarkMode)}
-                    className={`p-1.5 rounded-lg border transition-colors ml-2 ${isDarkMode ? 'bg-neutral-900 border-neutral-800 text-yellow-400 hover:text-white' : 'bg-gray-100 border-gray-300 text-gray-500'}`}
+                    className={`p-1.5 rounded-lg border transition-colors ml-2 ${isDarkMode ? 'bg-neutral-800 border-neutral-700 text-yellow-400 hover:text-white' : 'bg-gray-100 border-gray-300 text-gray-500'}`}
                     title="Сменить тему"
                 >
                     {isDarkMode ? <Sun size={14}/> : <Moon size={14}/>}
                 </button>
 
                 {activeSkuId ? (
-                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded border ${isDarkMode ? 'bg-blue-900/10 text-blue-400 border-blue-900' : 'bg-blue-100 text-blue-600 border-blue-200'}`}>
+                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded border ${isDarkMode ? 'bg-blue-900/20 text-blue-400 border-blue-800' : 'bg-blue-100 text-blue-600 border-blue-200'}`}>
                     <span className="font-bold">Редактирование</span>
-                    <button onClick={exitEditMode} className="hover:text-red-500 ml-2"><i className="fas fa-times">x</i></button>
+                    <button onClick={exitEditMode} className="hover:text-red-500 ml-2"><X size={12}/></button>
                   </div>
                 ) : (
-                  <span className={`text-xs font-normal px-2 py-1 rounded ${isDarkMode ? 'bg-neutral-900 text-neutral-500' : 'bg-gray-100 text-gray-400'}`}>Новый расчет</span>
+                  <span className={`text-xs font-normal px-2 py-1 rounded ${isDarkMode ? 'bg-neutral-800 text-neutral-500' : 'bg-gray-100 text-gray-400'}`}>Новый расчет</span>
                 )}
               </div>
 
               <div className="flex gap-2 w-full sm:w-auto">
                 <input 
-                    className={`text-xs border rounded px-3 py-1.5 w-full sm:w-40 focus:outline-none focus:border-blue-400 transition-colors ${isDarkMode ? 'bg-neutral-900 border-neutral-800 text-neutral-200 placeholder-neutral-600' : 'bg-white border-gray-300 text-gray-800'}`}
+                    className={`text-xs border rounded px-3 py-1.5 w-full sm:w-40 focus:outline-none focus:border-blue-400 transition-colors ${isDarkMode ? 'bg-neutral-900 border-neutral-700 text-neutral-200 placeholder-neutral-600' : 'bg-white border-gray-300 text-gray-800'}`}
                     placeholder="Название SKU"
-                    value={inputs.name}
-                    onChange={(e) => setInputs({...inputs, name: e.target.value})}
+                    value={tempName}
+                    onChange={handleNameChange}
                 />
                 
                 {!activeSkuId ? (
@@ -441,18 +487,18 @@ export default function PackagingCalculator() {
                   {['len', 'wid', 'hgt'].map(f => (
                     <div key={f}>
                       <label className={`block text-xs mb-1 ${isDarkMode ? 'text-neutral-500' : 'text-gray-500'}`}>{LABELS[f]} (см)</label>
-                      <input type="number" className={`w-full border rounded p-2 text-sm focus:border-blue-500 outline-none transition-all ${isDarkMode ? 'bg-neutral-900 border-neutral-800 text-neutral-200' : 'bg-white border-gray-300'}`}
+                      <input type="number" className={`w-full border rounded p-2 text-sm focus:border-blue-500 outline-none transition-all ${isDarkMode ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-white border-gray-300'}`}
                         value={inputs[f]} onChange={(e) => setInputs({...inputs, [f]: parseFloat(e.target.value) || 0})} />
                     </div>
                   ))}
                   <div>
                     <label className={`block text-xs mb-1 ${isDarkMode ? 'text-neutral-500' : 'text-gray-500'}`}>Вес (кг)</label>
-                    <input type="number" step="0.01" className={`w-full border rounded p-2 text-sm focus:border-blue-500 outline-none ${isDarkMode ? 'bg-neutral-900 border-neutral-800 text-neutral-200' : 'bg-white border-gray-300'}`}
+                    <input type="number" step="0.01" className={`w-full border rounded p-2 text-sm focus:border-blue-500 outline-none ${isDarkMode ? 'bg-neutral-900 border-neutral-700 text-neutral-200' : 'bg-white border-gray-300'}`}
                         value={inputs.wgt} onChange={(e) => setInputs({...inputs, wgt: parseFloat(e.target.value) || 0})} />
                   </div>
                   <div>
                     <label className="block text-xs text-blue-500 font-bold mb-1">Кол-во</label>
-                    <input type="number" min="1" className={`w-full border border-blue-400 rounded p-2 text-sm font-bold outline-none ${isDarkMode ? 'bg-blue-900/10 text-blue-300 border-blue-800' : 'bg-blue-50 text-gray-800'}`}
+                    <input type="number" min="1" className={`w-full border border-blue-400 rounded p-2 text-sm font-bold outline-none ${isDarkMode ? 'bg-blue-900/10 text-blue-100' : 'bg-blue-50 text-gray-800'}`}
                         value={inputs.qty} onChange={(e) => setInputs({...inputs, qty: parseFloat(e.target.value) || 1})} />
                   </div>
               </div>
@@ -469,9 +515,9 @@ export default function PackagingCalculator() {
                 <h3 className={`text-xs font-bold uppercase mb-2 ${isDarkMode ? 'text-neutral-500' : 'text-gray-400'}`}>1. Внешний</h3>
                 <div className="space-y-2">
                   {LAYERS.l1.map(opt => (
-                    <label key={opt.id} className={`flex items-center p-3 rounded border cursor-pointer transition-colors ${inputs.layer1 === opt.id ? (isDarkMode ? 'bg-blue-900/10 border-blue-700' : 'bg-blue-50 border-blue-400') : (isDarkMode ? 'hover:bg-neutral-900 border-neutral-800' : 'hover:bg-gray-50 border-gray-200')}`}>
+                    <label key={opt.id} className={`flex items-center p-3 rounded border cursor-pointer transition-colors ${inputs.layer1 === opt.id ? (isDarkMode ? 'bg-blue-900/10 border-blue-700' : 'bg-blue-50 border-blue-400') : (isDarkMode ? 'hover:bg-neutral-800 border-neutral-800' : 'hover:bg-gray-50 border-gray-200')}`}>
                       <input type="radio" name="l1" className="hidden" checked={inputs.layer1 === opt.id} onChange={() => setInputs({...inputs, layer1: opt.id})} />
-                      <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${inputs.layer1 === opt.id ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
+                      <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${inputs.layer1 === opt.id ? 'border-blue-500 bg-blue-500' : 'border-gray-400'}`}>
                           {inputs.layer1 === opt.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                       </div>
                       <span className={`text-sm ${isDarkMode ? 'text-neutral-300' : 'text-gray-800'}`}>{opt.name}</span>
@@ -483,9 +529,9 @@ export default function PackagingCalculator() {
                 <h3 className={`text-xs font-bold uppercase mb-2 ${isDarkMode ? 'text-neutral-500' : 'text-gray-400'}`}>2. Внутренний</h3>
                 <div className="space-y-2">
                   {LAYERS.l2.map(opt => (
-                    <label key={opt.id} className={`flex items-center p-3 rounded border cursor-pointer transition-colors ${inputs.layer2 === opt.id ? (isDarkMode ? 'bg-blue-900/10 border-blue-700' : 'bg-blue-50 border-blue-400') : (isDarkMode ? 'hover:bg-neutral-900 border-neutral-800' : 'hover:bg-gray-50 border-gray-200')}`}>
+                    <label key={opt.id} className={`flex items-center p-3 rounded border cursor-pointer transition-colors ${inputs.layer2 === opt.id ? (isDarkMode ? 'bg-blue-900/10 border-blue-700' : 'bg-blue-50 border-blue-400') : (isDarkMode ? 'hover:bg-neutral-800 border-neutral-800' : 'hover:bg-gray-50 border-gray-200')}`}>
                       <input type="radio" name="l2" className="hidden" checked={inputs.layer2 === opt.id} onChange={() => setInputs({...inputs, layer2: opt.id})} />
-                      <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${inputs.layer2 === opt.id ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
+                      <div className={`w-4 h-4 rounded-full border mr-3 flex items-center justify-center ${inputs.layer2 === opt.id ? 'border-blue-500 bg-blue-500' : 'border-gray-400'}`}>
                           {inputs.layer2 === opt.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                       </div>
                       <span className={`text-sm ${isDarkMode ? 'text-neutral-300' : 'text-gray-800'}`}>{opt.name}</span>
@@ -497,11 +543,25 @@ export default function PackagingCalculator() {
 
             {/* EXTRA */}
             <div className={`mb-6 p-3 rounded border ${isDarkMode ? 'bg-neutral-900 border-neutral-800' : 'bg-gray-50 border-gray-100'}`}>
-              <h3 className={`text-sm font-semibold uppercase tracking-wider mb-2 ${isDarkMode ? 'text-neutral-500' : 'text-gray-500'}`}>Дополнительно</h3>
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input type="checkbox" checked={inputs.kiz} onChange={(e) => setInputs({...inputs, kiz: e.target.checked})} className="rounded text-blue-600 w-4 h-4" />
-                <span className={`text-sm ${isDarkMode ? 'text-neutral-300' : 'text-gray-800'}`}>Наклейка КиЗ <span className="text-green-500 font-bold">(+10₽)</span></span>
-              </label>
+              <h3 className={`text-sm font-semibold uppercase tracking-wider mb-3 ${isDarkMode ? 'text-neutral-500' : 'text-gray-500'}`}>Дополнительно</h3>
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input type="checkbox" checked={inputs.kiz} onChange={(e) => setInputs({...inputs, kiz: e.target.checked})} className="rounded text-blue-600 w-4 h-4" />
+                  <span className={`text-sm ${isDarkMode ? 'text-neutral-300' : 'text-gray-800'}`}>Наклейка КиЗ <span className="text-green-500 font-bold">(+10₽)</span></span>
+                </label>
+                
+                <div className="flex items-center gap-2">
+                    <span className={`text-sm ${isDarkMode ? 'text-neutral-300' : 'text-gray-800'}`}>Спец. упаковка:</span>
+                    <input 
+                        type="number" 
+                        min="0"
+                        className={`w-20 border rounded p-1 text-sm text-right focus:border-blue-500 outline-none ${isDarkMode ? 'bg-black border-neutral-700 text-white' : 'bg-white border-gray-300'}`}
+                        value={inputs.customCost} 
+                        onChange={(e) => setInputs({...inputs, customCost: parseFloat(e.target.value) || 0})}
+                    />
+                    <span className="text-xs text-gray-400">руб</span>
+                </div>
+              </div>
             </div>
 
             {/* ERROR */}
@@ -520,6 +580,7 @@ export default function PackagingCalculator() {
                       {results.workThermo > 0 && <div className="flex justify-between"><span>Термо:</span><span>{results.workThermo.toFixed(2)}</span></div>}
                       {results.workVpp > 0 && <div className="flex justify-between"><span>ВПП:</span><span>{results.workVpp.toFixed(2)}</span></div>}
                       {results.workKiz > 0 && <div className="flex justify-between"><span>КиЗ:</span><span>{results.workKiz.toFixed(2)}</span></div>}
+                      {results.workCustom > 0 && <div className="flex justify-between"><span className="text-blue-500">Спец. упак:</span><span className="text-blue-500">{results.workCustom.toFixed(2)}</span></div>}
                       {results.workOther > 0 && <div className="flex justify-between"><span>Прочее:</span><span>{results.workOther.toFixed(2)}</span></div>}
                     </div>
                 </div>
@@ -574,21 +635,22 @@ export default function PackagingCalculator() {
         {/* RIGHT COLUMN: SKU MANAGER */}
         <div className="w-full md:w-80 flex flex-col gap-4 h-full">
           <div className={`rounded-xl shadow-lg border flex flex-col h-full overflow-hidden ${isDarkMode ? 'bg-black border-neutral-800' : 'bg-white border-gray-200'}`}>
-              <div className={`p-4 border-b ${isDarkMode ? 'border-neutral-800 bg-black' : 'border-gray-100 bg-gray-50'}`}>
+              <div className={`p-4 border-b flex-shrink-0 ${isDarkMode ? 'border-neutral-800 bg-black' : 'border-gray-100 bg-gray-50'}`}>
                 <h3 className={`font-bold text-sm flex justify-between ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
                   <span className="flex items-center gap-2"><Package size={16} className="text-blue-500"/> Менеджер SKU</span>
                   <span className={`text-xs px-2 rounded ${isDarkMode ? 'bg-neutral-800 text-neutral-400 border border-neutral-700' : 'bg-white border text-gray-400'}`}>{skus.length} шт</span>
                 </h3>
               </div>
               
-              <div className={`p-3 border-b ${isDarkMode ? 'border-neutral-800 bg-black' : 'border-gray-100 bg-gray-50'}`}>
-                <textarea id="sku-import" className={`w-full h-20 text-xs p-2 border rounded resize-none focus:border-blue-500 outline-none ${isDarkMode ? 'bg-neutral-900 border-neutral-800 text-neutral-200' : 'bg-white border-gray-300'}`} placeholder="20x20x10&#10;15 15 5 0.5"></textarea>
+              <div className={`p-3 border-b flex-shrink-0 ${isDarkMode ? 'border-neutral-800 bg-black' : 'border-gray-100 bg-gray-50'}`}>
+                <textarea 
+                    value={importText}
+                    onChange={e => setImportText(e.target.value)}
+                    className={`w-full h-20 text-xs p-2 border rounded resize-none focus:border-blue-500 outline-none ${isDarkMode ? 'bg-neutral-900 border-neutral-800 text-neutral-200' : 'bg-white border-gray-300'}`} 
+                    placeholder="20x20x10&#10;15 15 5 0.5"
+                />
                 <div className="flex gap-2 mt-2">
-                  <button onClick={() => {
-                      const val = document.getElementById('sku-import').value;
-                      handleParseImport(val);
-                      document.getElementById('sku-import').value = '';
-                  }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 rounded">Импорт</button>
+                  <button onClick={handleParseImport} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 rounded">Импорт</button>
                   <button onClick={() => setSkus([])} className={`px-3 rounded ${isDarkMode ? 'bg-neutral-800 text-neutral-400 hover:bg-red-900/30 hover:text-red-400' : 'bg-gray-200 text-gray-600 hover:bg-red-100 hover:text-red-500'}`}><Trash2 size={14}/></button>
                 </div>
               </div>
@@ -624,11 +686,7 @@ export default function PackagingCalculator() {
                         <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button onClick={(e) => {
                               e.stopPropagation();
-                              const name = generateName(sku.name + " (Копия)");
-                              const newSku = { ...sku, name, id: Date.now() };
-                              setSkus(prev => [...prev, newSku]);
-                              setActiveSkuId(newSku.id);
-                              setInputs(newSku);
+                              handleDuplicate();
                             }} className={`p-1 ${isDarkMode ? 'text-neutral-500 hover:text-blue-400' : 'text-gray-300 hover:text-blue-500'}`}><Copy size={14}/></button>
                             
                             <button onClick={(e) => deleteSku(e, sku.id)} className={`p-1 ${isDarkMode ? 'text-neutral-500 hover:text-red-400' : 'text-gray-300 hover:text-red-500'}`}><Trash2 size={14}/></button>
@@ -637,10 +695,26 @@ export default function PackagingCalculator() {
                     );
                 })}
               </div>
+              
+              {/* FOOTER: TOTAL BATCH */}
+              <div className={`p-4 border-t flex-shrink-0 ${isDarkMode ? 'border-neutral-800 bg-black' : 'border-gray-200 bg-white'}`}>
+                  <div className="flex justify-between items-center">
+                      <span className={`font-bold ${isDarkMode ? 'text-neutral-400' : 'text-gray-500'}`}>ИТОГО ПАРТИЯ:</span>
+                      <span className="text-xl font-bold text-blue-600">{grandTotalBatch.toFixed(0)} ₽</span>
+                  </div>
+              </div>
+
           </div>
         </div>
 
       </div>
+      <style>{`
+        /* Custom scrollbar for dark mode */
+        .dark ::-webkit-scrollbar-track { background: #171717; }
+        .dark ::-webkit-scrollbar-thumb { background: #333; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
+import AiChatWidget from './components/AiChatWidget';
 import HelpCenter from './components/HelpCenter';
 import FboCalculator from './components/FboCalculator';
 import OzonCalculator from './components/OzonCalculator';
@@ -108,7 +108,7 @@ function App() {
           <button onClick={hardReset} className="fixed bottom-2 left-2 text-[10px] text-slate-400 hover:text-red-600 font-bold z-50 bg-white/80 px-2 py-1 rounded shadow border">
             ↻ ОБНОВИТЬ СТРУКТУРУ
           </button>
-      </div>
+      <AiChatWidget /></div>
     </Router>
   );
 }

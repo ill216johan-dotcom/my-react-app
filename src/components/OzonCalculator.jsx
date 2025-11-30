@@ -251,9 +251,9 @@ const OzonCalculator = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h1 className="text-2xl font-bold text-blue-900 dark:text-blue-400 flex items-center gap-2">
-                <Zap className="fill-yellow-400 text-blue-700 dark:text-blue-500" /> Ozon FBO: Калькулятор выгоды vRDC
+                <Truck className="fill-yellow-400 text-blue-700 dark:text-blue-500" /> Калькулятор выгоды Ozon FBO
             </h1>
-            <p className="text-slate-500 dark:text-zinc-400 text-sm">Новые правила 2025: Учитываем СВД (Среднее Время Доставки) и штрафы</p>
+            <p className="text-slate-500 dark:text-zinc-400 text-sm">Учитываем СВД (Среднее Время Доставки) и штрафы</p>
           </div>
           <div className="flex gap-2">
              <button 

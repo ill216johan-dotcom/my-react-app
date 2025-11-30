@@ -27,8 +27,8 @@ const HighlightText = React.memo(({ text = '', highlight = '' }) => {
 
 const HelpCenter = ({ data }) => {
   // Состояния
-  const [inputValue, setInputValue] = useState(''); // Мгновенный ввод
-  const [debouncedTerm, setDebouncedTerm] = useState(''); // Для поиска (с задержкой)
+  const [inputValue, setInputValue] = useState('');
+  const [debouncedTerm, setDebouncedTerm] = useState('');
   
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -76,20 +76,69 @@ const HelpCenter = ({ data }) => {
     }
   }, [categories]); 
 
-  // Генерация содержания (TOC)
+  // --- ГЕНЕРАЦИЯ СОДЕРЖАНИЯ (TOC) И ОЧИСТКА ---
   useEffect(() => {
     if (!selectedArticle) return;
+
+    // 1. Парсинг HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(selectedArticle.content, 'text/html');
-    const headers = doc.querySelectorAll('h2, h3');
+    const body = doc.body;
+
+    // --- БЛОК ОЧИСТКИ (Удаляем старое меню из статьи) ---
+    
+    // 1. Удаляем все теги <details> (обычно в них скрывают меню)
+    const details = body.querySelectorAll('details');
+    details.forEach(el => el.remove());
+
+    // 2. Ищем блоки div, которые содержат слова "На странице" или "Содержание"
+    const divs = body.querySelectorAll('div');
+    divs.forEach(div => {
+        const text = div.textContent.toLowerCase();
+        // Если блок содержит ключевые слова И список внутри - удаляем
+        if ((text.includes('на странице') || text.includes('содержание')) && (div.querySelector('ul') || div.querySelector('ol'))) {
+            div.remove();
+        }
+    });
+
+    // 3. Ищем списки <ul>, которые содержат только якорные ссылки (#link)
+    const lists = body.querySelectorAll('ul');
+    lists.forEach(ul => {
+        const links = ul.querySelectorAll('a');
+        if (links.length > 0) {
+            let isAnchorList = true;
+            links.forEach(link => {
+                const href = link.getAttribute('href');
+                if (!href || !href.startsWith('#')) isAnchorList = false;
+            });
+
+            if (isAnchorList) {
+                ul.remove();
+                const prev = ul.previousElementSibling;
+                if (prev && (prev.tagName === 'H2' || prev.tagName === 'H3' || prev.tagName === 'P')) {
+                    const prevText = prev.textContent.toLowerCase();
+                    if (prevText.includes('содержание') || prevText.includes('на странице')) {
+                        prev.remove();
+                    }
+                }
+            }
+        }
+    });
+
+    // --- КОНЕЦ ОЧИСТКИ ---
+    
+    // 4. Генерация нового красивого TOC для правой колонки
+    const headers = body.querySelectorAll('h2, h3');
     const newToc = [];
+
     headers.forEach((header, index) => {
         const id = header.id || `section-${index}`;
         header.id = id;
         newToc.push({ id, text: header.textContent, level: header.tagName.toLowerCase() });
     });
+
     setToc(newToc);
-    setProcessedContent(doc.body.innerHTML);
+    setProcessedContent(body.innerHTML); // Сохраняем уже ОЧИЩЕННЫЙ HTML
   }, [selectedArticle]);
 
 
@@ -109,7 +158,6 @@ const HelpCenter = ({ data }) => {
               return inTitle || inContent;
           });
 
-          // Сортировка: Заголовки вверх
           matchingArticles.sort((a, b) => {
               const aTitle = (a.title || '').toLowerCase().includes(lowerTerm);
               const bTitle = (b.title || '').toLowerCase().includes(lowerTerm);
@@ -169,9 +217,16 @@ const HelpCenter = ({ data }) => {
           </div>
       )}
 
-      {/* Мобильная шапка */}
+      {/* --- МОБИЛЬНАЯ ШАПКА --- */}
       <div className="md:hidden border-b p-4 flex justify-between items-center sticky top-0 z-50 bg-white dark:bg-black border-slate-200 dark:border-neutral-800">
-         <span className="font-bold text-lg text-indigo-900 dark:text-indigo-400">FF Help Center</span>
+         {/* ЛОГОТИП (Мобильный) */}
+         <div className="flex items-center">
+            {/* Светлое лого */}
+            <img src="/logo-light.svg" alt="FF Help Center" className="h-8 w-auto block dark:hidden object-contain" />
+            {/* Темное лого */}
+            <img src="/logo-dark.svg" alt="FF Help Center" className="h-8 w-auto hidden dark:block object-contain" />
+         </div>
+         
          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 bg-slate-100 dark:bg-neutral-900 rounded text-slate-600 dark:text-neutral-400">
             <Menu size={20}/>
          </button>
@@ -189,13 +244,15 @@ const HelpCenter = ({ data }) => {
             {/* ШАПКА САЙДБАРА */}
             <div className="p-5 sticky top-0 z-10 bg-[#F9FAFB] dark:bg-black transition-colors duration-300">
                 <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-400 font-extrabold text-xl tracking-tight">
-                        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-sm shadow-indigo-200 dark:shadow-none">
-                            <span className="font-serif italic font-bold text-lg">F</span>
-                        </div>
-                        FF Help Center
+                    {/* --- ЛОГОТИП (Десктоп) --- */}
+                    <div className="flex items-center">
+                        {/* Светлое лого (показывается только в светлой теме) */}
+                        <img src="/logo-light.svg" alt="FF Help Center" className="h-10 w-auto block dark:hidden object-contain" />
+                        {/* Темное лого (показывается только в темной теме) */}
+                        <img src="/logo-dark.svg" alt="FF Help Center" className="h-10 w-auto hidden dark:block object-contain" />
                     </div>
                     
+                    {/* Переключатель темы */}
                     <button 
                         onClick={() => setIsDarkMode(!isDarkMode)}
                         className="p-2 rounded-lg border transition-colors
@@ -234,11 +291,11 @@ const HelpCenter = ({ data }) => {
                         Инструменты
                      </div>
                      <Link to="/calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900">
-                        <Calculator size={16}/> Калькулятор FBO
+                        <Calculator size={16}/> Калькулятор выгоды Wildberries FBO
                      </Link>
                      <Link to="/ozon-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-neutral-900">
-                        <div className="w-4 h-4 bg-blue-600 text-white rounded-[2px] text-[8px] flex items-center justify-center font-bold">Oz</div>
-                        Калькулятор Ozon
+                        <Calculator size={16}/>
+                        Калькулятор выгоды Ozon FBO
                      </Link>
                      <Link to="/packaging-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-white dark:hover:bg-neutral-900">
                         <Package size={16}/> Расчет упаковки
@@ -248,6 +305,7 @@ const HelpCenter = ({ data }) => {
                      </Link>
                 </div>
 
+                {/* ПАПКИ И СТАТЬИ */}
                 <div className="space-y-1">
                     {displayCategories.map(cat => {
                         const isSearchMode = debouncedTerm.length > 0;
@@ -334,34 +392,25 @@ const HelpCenter = ({ data }) => {
                         <style>{`
                             .doc-content { font-size: 16px; line-height: 1.7; color: #334155; }
                             .dark .doc-content { color: #d4d4d4; }
-                            
                             .doc-content h1 { font-size: 2em; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; color: #1e293b; letter-spacing: -0.02em; }
                             .dark .doc-content h1 { color: #ffffff; }
-                            
                             .doc-content h2 { font-size: 1.5em; font-weight: 600; margin-top: 2em; margin-bottom: 0.75em; color: #1e293b; padding-bottom: 0.3em; border-bottom: 1px solid #e2e8f0; scroll-margin-top: 100px; }
                             .dark .doc-content h2 { color: #fafafa; border-bottom-color: #262626; }
-                            
                             .doc-content h3 { font-size: 1.25em; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; color: #475569; scroll-margin-top: 100px; }
                             .dark .doc-content h3 { color: #a3a3a3; }
-                            
                             .doc-content p { margin-bottom: 1.25em; }
                             .doc-content ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.25em; }
                             .doc-content ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 1.25em; }
                             .doc-content li { margin-bottom: 0.5em; padding-left: 0.2em; }
-                            
                             .doc-content a { color: #4f46e5; text-decoration: none; font-weight: 500; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
                             .dark .doc-content a { color: #818cf8; }
                             .doc-content a:hover { border-bottom-color: currentColor; }
-                            
                             .doc-content blockquote { border-left: 3px solid #6366f1; background: #f8fafc; padding: 1em 1.5em; margin: 1.5em 0; border-radius: 0 8px 8px 0; font-style: italic; color: #475569; }
                             .dark .doc-content blockquote { background: #171717; color: #a3a3a3; border-left-color: #6366f1; }
-                            
                             .doc-content img { border-radius: 8px; border: 1px solid #e2e8f0; margin: 2em 0; max-width: 100%; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
                             .dark .doc-content img { border-color: #262626; opacity: 0.9; }
-                            
                             .doc-content code { background: #f1f5f9; padding: 0.2em 0.4em; rounded: 4px; font-size: 0.85em; color: #db2777; font-family: monospace; }
                             .dark .doc-content code { background: #262626; color: #f472b6; }
-                            
                             .doc-content pre { background: #1e293b; color: #f8fafc; padding: 1em; rounded: 8px; overflow-x: auto; margin: 1.5em 0; }
                             .dark .doc-content pre { background: #171717; border: 1px solid #262626; }
                         `}</style>
