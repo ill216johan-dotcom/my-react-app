@@ -53,7 +53,7 @@ function App() {
 
     // 2. Если в LocalStorage пусто, качаем файл из папки public
     // Обрати внимание: путь просто '/knowledgeBase.json'
-    fetch('/knowledgeBase.json')
+    fetch('/knowledgebase.json')
         .then(response => {
             if (!response.ok) {
                 throw new Error("Не удалось загрузить базу данных");
