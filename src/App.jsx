@@ -3,15 +3,18 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import HelpCenter from './components/HelpCenter';
 import FboCalculator from './components/FboCalculator';
-import OzonCalculator from './components/OzonCalculator';        // <--- НОВОЕ
-import PackagingCalculator from './components/PackagingCalculator'; // <--- НОВОЕ
+import OzonCalculator from './components/OzonCalculator';
+import PackagingCalculator from './components/PackagingCalculator';
 import AdminPanel from './components/AdminPanel';
-import rawData from './data/knowledgeBase.json';
+
+// МЫ УДАЛИЛИ ИМПОРТ rawData, чтобы облегчить сборку!
 
 function App() {
+  // Функция обработки данных (оставили как была)
   const transformData = (incoming) => {
     if (!incoming) return { categories: [] };
     let rawArticles = [];
+    // Проверка: это массив или объект с категориями?
     if (Array.isArray(incoming)) rawArticles = incoming;
     else if (incoming.categories && Array.isArray(incoming.categories)) rawArticles = incoming.categories;
     else return { categories: [] };
@@ -32,13 +35,42 @@ function App() {
     return { categories: Object.values(groups) };
   };
 
-  const [data, setData] = useState(() => {
+  // Состояние теперь может быть null, пока данные грузятся
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Используем useEffect для загрузки данных
+  useEffect(() => {
+    // 1. Сначала пробуем взять из LocalStorage (если ты там что-то менял)
     const saved = localStorage.getItem('siteData');
     if (saved) {
-        try { return JSON.parse(saved); } catch (e) { console.error(e); }
+        try { 
+            setData(JSON.parse(saved));
+            setLoading(false);
+            return; // Если нашли, выходим, файл качать не надо
+        } catch (e) { console.error(e); }
     }
-    return transformData(rawData);
-  });
+
+    // 2. Если в LocalStorage пусто, качаем файл из папки public
+    // Обрати внимание: путь просто '/knowledgeBase.json'
+    fetch('/knowledgeBase.json')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Не удалось загрузить базу данных");
+            }
+            return response.json();
+        })
+        .then(json => {
+            // Превращаем сырой JSON в структуру категорий
+            const structuredData = transformData(json);
+            setData(structuredData);
+            setLoading(false);
+        })
+        .catch(error => {
+            console.error("Ошибка при загрузке данных:", error);
+            setLoading(false);
+        });
+  }, []); // Пустые скобки = выполнить 1 раз при старте
 
   const handleDataUpdate = (newData) => {
     setData(newData);
@@ -52,14 +84,24 @@ function App() {
       }
   };
 
+  // Показываем "Загрузка...", пока данные не пришли
+  if (loading) {
+      return <div className="p-10 text-center text-gray-500">Загрузка базы данных...</div>;
+  }
+
+  // Если данных нет и загрузка прошла (ошибка), чтобы сайт не упал
+  if (!data) {
+      return <div className="p-10 text-center text-red-500">Ошибка: Данные не найдены. Проверьте файл public/knowledgeBase.json</div>;
+  }
+
   return (
     <Router>
       <div className="relative">
           <Routes>
             <Route path="/" element={<HelpCenter data={data} />} />
             <Route path="/calculator" element={<FboCalculator />} />
-            <Route path="/ozon-calculator" element={<OzonCalculator />} />           {/* <--- НОВОЕ */}
-            <Route path="/packaging-calculator" element={<PackagingCalculator />} /> {/* <--- НОВОЕ */}
+            <Route path="/ozon-calculator" element={<OzonCalculator />} />
+            <Route path="/packaging-calculator" element={<PackagingCalculator />} />
             <Route path="/admin" element={<AdminPanel data={data} onSave={handleDataUpdate} />} />
           </Routes>
           
