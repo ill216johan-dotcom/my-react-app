@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, Sun, Moon, RefreshCw, X } from 'lucide-react';
+import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, Sun, Moon, RefreshCw, X, Lock, Unlock } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const FboCalculator = () => {
   const [theme, setTheme] = useState('light');
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
 
-  // --- Theme Classes (Light Theme Only) ---
+  // --- Theme Classes ---
   const t = {
       mainBg: 'bg-slate-50', mainText: 'text-slate-800', headerTitle: 'text-indigo-900',
       cardBg: 'bg-white', cardBorder: 'border-slate-200',
@@ -46,8 +46,10 @@ const FboCalculator = () => {
     locIndex: 1.15, 
     selectedWhIds: [1], 
   });
+  
+  const [anchorMode, setAnchorMode] = useState('items');
 
-  // --- 4. СКЛАДЫ (24 АКТУАЛЬНЫХ НАПРАВЛЕНИЯ) ---
+  // --- 4. СКЛАДЫ ---
   const initialWarehouses = [
     // ЦФО
     { id: 1, name: 'Коледино', region: 'ЦФО', logisticCostBox: 280, wbCoeff: 2.00, boxCount: 15, localSpeed: 24, remoteSpeed: 24, regionDemand: 25, isHub: true },
@@ -86,7 +88,6 @@ const FboCalculator = () => {
   // --- ВЫЧИСЛЕНИЯ ПАРТИИ ---
 
   const itemLiterage = (product.width * product.height * product.length) / 1000;
-  // Литраж: либо ручной, либо расчетный
   const calcLiterage = (product.width * product.height * product.length) / 1000;
   const currentLiterage = manualLiterage !== null ? manualLiterage : calcLiterage;
 
@@ -143,13 +144,35 @@ const FboCalculator = () => {
       }
   };
 
+  // Изменение "Всего коробов"
   const handleTotalBoxesChange = (newTotal) => {
       const total = Math.max(0, parseInt(newTotal) || 0);
       setManualTotalBoxes(total);
-      setManualTotalItems(null);
+      
+      if (anchorMode === 'items') {
+          // ЯКОРЬ: ТОВАРЫ.
+          // Если меняем короба -> меняется "Штук в коробе", чтобы сохранить кол-во товара
+          if (total > 0 && displayTotalItems > 0) {
+              const newUnits = Math.ceil(displayTotalItems / total);
+              setManualUnitsPerBox(Math.max(1, newUnits));
+              
+              // Также нужно пересчитать (заблокировать) литраж, так как изменилась плотность
+              // Литраж = (Объем короба * Коэф) / Штук
+              const impliedLiterage = (96 * 0.95) / newUnits;
+              setManualLiterage(impliedLiterage);
+              
+              if (manualTotalItems === null) setManualTotalItems(displayTotalItems);
+          }
+      } else {
+          // ЯКОРЬ: ВЛОЖЕНИЯ.
+          // Меняем короба -> меняется кол-во товара
+          setManualTotalItems(null);
+      }
+      
       distributeBoxes(total);
   };
 
+  // Изменение "Товаров в партии"
   const handleTotalItemsChange = (newTotalItems) => {
       const items = Math.max(0, parseInt(newTotalItems) || 0);
       setManualTotalItems(items);
@@ -158,13 +181,17 @@ const FboCalculator = () => {
       distributeBoxes(newBoxes);
   };
 
+  // Изменение "Штук в коробе"
   const handleUnitsPerBoxChange = (newVal) => {
       const newUnits = Math.max(1, parseInt(newVal) || 0);
       setManualUnitsPerBox(newUnits);
-      if (totalItems > 0) {
+
+      if (anchorMode === 'items' && totalItems > 0) {
           const newBoxes = Math.ceil(totalItems / newUnits);
           setManualTotalBoxes(newBoxes);
           distributeBoxes(newBoxes);
+      } else {
+          setManualTotalItems(null); 
       }
   };
 
@@ -463,7 +490,16 @@ const FboCalculator = () => {
                {/* Units Per Box Manual Override */}
                <div className={`flex items-center gap-3 bg-indigo-50 p-2 rounded border border-indigo-100 mt-3`}>
                   <div className="flex-1">
-                    <label className={`text-[10px] uppercase font-bold text-indigo-800 mb-1 block`}>Штук в коробе</label>
+                    <div className="flex items-center justify-between mb-1">
+                        <label className={`text-[10px] uppercase font-bold text-indigo-800`}>Штук в коробе</label>
+                        <button 
+                            onClick={() => setAnchorMode('units')}
+                            className={`text-[9px] px-1.5 rounded transition-colors ${anchorMode === 'units' ? 'bg-indigo-600 text-white' : 'text-indigo-400 hover:bg-indigo-100'}`}
+                            title={anchorMode === 'units' ? 'Режим: Вложения зафиксированы' : 'Включить режим фиксированных вложений'}
+                        >
+                            {anchorMode === 'units' ? <Lock size={10} /> : <Unlock size={10} />}
+                        </button>
+                    </div>
                     <div className="flex items-center gap-2">
                         <input 
                             type="number" 
@@ -540,7 +576,16 @@ const FboCalculator = () => {
                        />
                    </div>
                    <div className="flex-1 text-right">
-                       <label className={`text-[10px] uppercase font-bold ${t.subtitleText} mb-1 block`}>Товаров в партии</label>
+                       <div className="flex justify-end items-center mb-1 gap-2">
+                           <button 
+                                onClick={() => setAnchorMode('items')}
+                                className={`text-[9px] px-1.5 rounded transition-colors ${anchorMode === 'items' ? 'bg-indigo-600 text-white' : 'text-indigo-400 hover:bg-indigo-100'}`}
+                                title={anchorMode === 'items' ? 'Режим: Товары зафиксированы (Якорь)' : 'Включить режим фиксированных товаров'}
+                            >
+                                {anchorMode === 'items' ? <Lock size={10} /> : <Unlock size={10} />}
+                            </button>
+                           <label className={`text-[10px] uppercase font-bold ${t.subtitleText} block`}>Товаров в партии</label>
+                       </div>
                        <div className="relative">
                            <input 
                                type="number" 
@@ -679,14 +724,14 @@ const FboCalculator = () => {
                             margin={{ top: 0, right: 30, left: 20, bottom: 0 }}
                             barSize={30}
                         >
-                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e5e7eb" />
+                            <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={t.inputBorder} />
                             <XAxis type="number" hide />
-                            <YAxis type="category" dataKey="name" width={140} tick={{fontSize: 11, fontWeight: 600, fill: '#334155'}} />
+                            <YAxis type="category" dataKey="name" width={140} tick={{fontSize: 11, fontWeight: 600, fill: t.inputText}} />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }} 
                                 labelStyle={{ color: '#1f2937' }}
                             />
-                            <Legend wrapperStyle={{fontSize: '12px', color: '#1f2937'}}/>
+                            <Legend wrapperStyle={{fontSize: '12px', color: t.inputText}}/>
                             <Bar name="Фулфилмент + Транзит" dataKey="Фулфилмент (Услуги + Доставка)" stackId="a" fill={t.ffBarColor} radius={[0, 0, 0, 0]} />
                             <Bar name="Тариф Wildberries" dataKey="Логистика ВБ" stackId="a" fill={t.wbBarColor} radius={[0, 4, 4, 0]} />
                         </BarChart>
