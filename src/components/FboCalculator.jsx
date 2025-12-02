@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, Sun, Moon, RefreshCw, X, Lock, Unlock, Search } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, RefreshCw, X, Lock, Unlock, Sun, Moon, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const FboCalculator = () => {
@@ -124,6 +124,7 @@ const FboCalculator = () => {
 
   const [warehouses, setWarehouses] = useState(initialWarehouses);
 
+  // Filter for client selection
   const filteredClientWarehouses = useMemo(() => {
     if (!whSearch) return warehouses;
     return warehouses.filter(w => w.name.toLowerCase().includes(whSearch.toLowerCase()));
@@ -150,7 +151,7 @@ const FboCalculator = () => {
   const baseWbLogistics = 50 + Math.max(0, currentLiterage - 5) * 5;
   const totalItems = displayTotalItems;
 
-  // --- УПРАВЛЕНИЕ ---
+  // --- ЛОГИКА ОБНОВЛЕНИЯ ---
   const distributeBoxes = (targetTotal) => {
       if (currentTableBoxes > 0) {
           const ratio = targetTotal / currentTableBoxes;
@@ -176,11 +177,6 @@ const FboCalculator = () => {
     setWarehouses(warehouses.map(w => w.id === id ? { ...w, boxCount: val } : w));
     setManualTotalBoxes(null);
     setManualTotalItems(null);
-  };
-
-  const handleLogisticCostChange = (id, value) => {
-    const val = Math.max(0, parseInt(value) || 0);
-    setWarehouses(warehouses.map(w => w.id === id ? { ...w, logisticCostBox: val } : w));
   };
 
   const handleTotalBoxesChange = (newTotal) => {
@@ -224,6 +220,11 @@ const FboCalculator = () => {
   const handleLiterageChange = (val) => {
       const num = parseFloat(val);
       setManualLiterage(isNaN(num) ? null : num);
+  };
+
+  const handleLogisticCostChange = (id, value) => {
+    const val = Math.max(0, parseInt(value) || 0);
+    setWarehouses(warehouses.map(w => w.id === id ? { ...w, logisticCostBox: val } : w));
   };
 
   const toggleClientWarehouse = (id) => {
@@ -289,15 +290,17 @@ const FboCalculator = () => {
   const getRegionColor = (region) => {
     if (isDark) {
         const darkMap = {
-            'ЦФО': 'bg-blue-900/40 text-blue-300 border-blue-800/50',
-            'СЗФО': 'bg-cyan-900/40 text-cyan-300 border-cyan-800/50',
-            'ЮФО': 'bg-orange-900/40 text-orange-300 border-orange-800/50',
-            'ПФО': 'bg-emerald-900/40 text-emerald-300 border-emerald-800/50',
-            'Урал': 'bg-violet-900/40 text-violet-300 border-violet-800/50',
-            'СФО': 'bg-indigo-900/40 text-indigo-300 border-indigo-800/50',
+            'ЦФО': 'bg-blue-900/50 text-blue-300 border-blue-800/50',
+            'СЗФО': 'bg-cyan-900/50 text-cyan-300 border-cyan-800/50',
+            'ЮФО': 'bg-orange-900/50 text-orange-300 border-orange-800/50',
+            'ПФО': 'bg-emerald-900/50 text-emerald-300 border-emerald-800/50',
+            'Урал': 'bg-violet-900/50 text-violet-300 border-violet-800/50',
+            'СФО': 'bg-indigo-900/50 text-indigo-300 border-indigo-800/50',
+            'ДВФО': 'bg-rose-900/50 text-rose-300 border-rose-800',
         };
         return darkMap[region] || 'bg-slate-700 text-slate-400 border-slate-600';
     }
+    
     const lightMap = {
         'ЦФО': 'bg-blue-100 text-blue-700 border-blue-200',
         'СЗФО': 'bg-cyan-100 text-cyan-700 border-cyan-200',
@@ -305,6 +308,7 @@ const FboCalculator = () => {
         'ПФО': 'bg-emerald-100 text-emerald-700 border-emerald-200',
         'Урал': 'bg-violet-100 text-violet-700 border-violet-200',
         'СФО': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+        'ДВФО': 'bg-rose-100 text-rose-700 border-rose-200',
     };
     return lightMap[region] || 'bg-slate-100 text-slate-600 border-slate-200';
   };
@@ -316,33 +320,51 @@ const FboCalculator = () => {
   };
 
   // --- СЦЕНАРИИ ---
+
   const clientScenario = (() => {
     if (totalItems === 0) return { wbLogisticsUnit: 0, ffUnit: 0, totalCost: 0, locIndex: 0, deliveryToWhCost: 0 };
-    const selectedWhs = warehouses.filter(w => clientSettings.selectedWhIds.includes(w.id));
-    const totalSelDemand = selectedWhs.reduce((sum, w) => sum + w.regionDemand, 0);
+
+    const selectedWarehouses = warehouses.filter(w => clientSettings.selectedWhIds.includes(w.id));
+    const totalSelectedDemand = selectedWarehouses.reduce((sum, w) => sum + w.regionDemand, 0);
     
-    let weightedCoeff = 0, weightedLogisticCost = 0;
-    if (totalSelDemand > 0) {
-        selectedWhs.forEach(w => {
-            const share = w.regionDemand / totalSelDemand;
+    let weightedCoeff = 0;
+    let weightedLogisticCost = 0;
+    
+    if (totalSelectedDemand > 0) {
+        selectedWarehouses.forEach(w => {
+            const share = w.regionDemand / totalSelectedDemand; 
             weightedCoeff += w.wbCoeff * share;
             weightedLogisticCost += w.logisticCostBox * share;
         });
-    } else { weightedCoeff = 2.0; weightedLogisticCost = 280; }
+    } else {
+        weightedCoeff = 2.0;
+        weightedLogisticCost = 280;
+    }
 
     const locIndex = clientSettings.locIndex;
     const wbCostUnit = baseWbLogistics * weightedCoeff * locIndex;
     const deliveryToWhTotal = currentTableBoxes * weightedLogisticCost;
     const ffTotal = calculateFFCost(totalItems, currentTableBoxes) + deliveryToWhTotal;
-    const whNames = selectedWhs.length > 3 ? `${selectedWhs.length} складов` : selectedWhs.map(w => w.name).join(', ');
 
-    return { wbLogisticsUnit: wbCostUnit, ffUnit: ffTotal / totalItems, totalCost: (wbCostUnit * totalItems) + ffTotal, locIndex, deliveryToWhCost: deliveryToWhTotal, whNames: whNames || 'Не выбрано' };
+    const whNames = selectedWarehouses.length > 3 ? `${selectedWarehouses.length} складов` : selectedWarehouses.map(w => w.name).join(', ');
+
+    return {
+      wbLogisticsUnit: wbCostUnit,
+      ffUnit: ffTotal / totalItems,
+      totalCost: (wbCostUnit * totalItems) + ffTotal,
+      locIndex: locIndex,
+      deliveryToWhCost: deliveryToWhTotal,
+      whNames: whNames || 'Не выбрано'
+    };
   })();
 
   const distributedScenario = (() => {
     if (totalItems === 0) return { wbLogisticsUnit: 0, ffUnit: 0, totalCost: 0, locIndex: 0, deliveryToWhCost: 0 };
-    let weightedWbLogisticsSum = 0, totalDeliveryToWh = 0;
+
+    let weightedWbLogisticsSum = 0;
+    let totalDeliveryToWh = 0;
     const locIndex = 0.7; 
+
     warehouses.forEach(w => {
        if (w.boxCount > 0) {
            const itemsInWh = w.boxCount * unitsPerBox;
@@ -350,21 +372,39 @@ const FboCalculator = () => {
            totalDeliveryToWh += w.boxCount * w.logisticCostBox;
        }
     });
+    
     const ffServicesAndMaterial = calculateFFCost(totalItems, currentTableBoxes);
     const totalFf = ffServicesAndMaterial + totalDeliveryToWh;
-    return { wbLogisticsUnit: weightedWbLogisticsSum / totalItems, ffUnit: totalFf / totalItems, totalCost: weightedWbLogisticsSum + totalFf, locIndex, deliveryToWhCost: totalDeliveryToWh };
+    
+    return {
+      wbLogisticsUnit: weightedWbLogisticsSum / totalItems,
+      ffUnit: totalFf / totalItems,
+      totalCost: weightedWbLogisticsSum + totalFf,
+      locIndex: locIndex,
+      deliveryToWhCost: totalDeliveryToWh
+    };
   })();
 
   const profit = clientScenario.totalCost - distributedScenario.totalCost;
+
   const chartData = [
-    { name: 'Как сейчас', 'Логистика ВБ': Math.round(clientScenario.wbLogisticsUnit), 'Фулфилмент (Услуги + Доставка)': Math.round(clientScenario.ffUnit) },
-    { name: 'С распределением', 'Логистика ВБ': Math.round(distributedScenario.wbLogisticsUnit), 'Фулфилмент (Услуги + Доставка)': Math.round(distributedScenario.ffUnit) },
+    {
+      name: `Как сейчас (Микс)`,
+      'Логистика ВБ': Math.round(clientScenario.wbLogisticsUnit),
+      'Фулфилмент': Math.round(clientScenario.ffUnit),
+    },
+    {
+      name: 'С распределением (Вы)',
+      'Логистика ВБ': Math.round(distributedScenario.wbLogisticsUnit),
+      'Фулфилмент': Math.round(distributedScenario.ffUnit),
+    },
   ];
 
   return (
     <div className={`p-4 min-h-screen font-sans transition-colors duration-200 ${t.mainBg} ${t.mainText}`}>
       <div className="max-w-7xl mx-auto">
-        {/* HEADER */}
+        
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
             <h1 className={`text-2xl font-bold flex items-center gap-2 ${t.headerTitle}`}>
@@ -373,24 +413,31 @@ const FboCalculator = () => {
             <p className={`text-sm ${t.subtitleText}`}>Управление Индексом Локализации и логистикой</p>
           </div>
           <div className="flex gap-2">
-             <button onClick={resetToCentral} className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-2 ${t.buttonBase}`}>
+             <button 
+                onClick={resetToCentral}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border ${t.cardBg} ${t.inputText} ${t.cardBorder} hover:opacity-80 flex items-center gap-2 transition-colors`}
+             >
                 <RotateCcw size={16} /> Сброс
              </button>
-             <button onClick={toggleTheme} className={`p-2 rounded-lg border transition-colors ${t.buttonBase}`}>
-                {isDark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} className="text-indigo-600" />}
+             <button 
+                onClick={toggleTheme}
+                className={`p-2 rounded-lg border ${t.cardBg} ${t.inputText} ${t.cardBorder} hover:opacity-80 transition-colors`}
+                title={theme === 'light' ? 'Переключить на темную тему' : 'Переключить на светлую тему'}
+             >
+                {t.isDark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} className="text-indigo-600" />}
              </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* LEFT: Config */}
+          {/* LEFT: Configuration (5 cols) */}
           <div className="lg:col-span-5 space-y-4">
             
             {/* 1. Client Settings */}
             <div className={`${t.cardBg} p-4 rounded-xl shadow-sm border ${t.cardBorder} relative overflow-hidden`}>
-                <div className={`absolute top-0 right-0 w-16 h-16 rounded-bl-full -mr-8 -mt-8 opacity-50 ${isDark ? 'bg-orange-900/30' : 'bg-orange-100'}`}></div>
-                <h3 className={`font-bold text-sm mb-3 flex items-center gap-2 relative z-10 ${isDark ? 'text-orange-400' : 'text-orange-800'}`}>
+                <div className={`absolute top-0 right-0 w-16 h-16 rounded-bl-full -mr-8 -mt-8 opacity-50 ${t.isDark ? 'bg-orange-900/30' : 'bg-orange-100'}`}></div>
+                <h3 className={`font-bold text-sm mb-3 flex items-center gap-2 relative z-10 ${t.isDark ? 'text-orange-400' : 'text-orange-800'}`}>
                     <Settings size={16} /> Текущая ситуация клиента
                 </h3>
                 <div className="space-y-3 relative z-10">
@@ -406,17 +453,17 @@ const FboCalculator = () => {
                                 className={`w-full pl-8 p-1.5 text-xs border rounded-md outline-none ${t.inputBg} ${t.inputBorder} ${t.inputText} ${t.focusRing}`}
                             />
                         </div>
-                        <div className={`max-h-32 overflow-y-auto border rounded-lg p-1 custom-scrollbar ${t.inputBg} ${t.inputBorder}`}>
+                        <div className={`max-h-32 overflow-y-auto border ${t.cardBorder} rounded-lg ${t.inputBg} p-1 custom-scrollbar`}>
                             {filteredClientWarehouses.map(w => {
                                 const isSelected = clientSettings.selectedWhIds.includes(w.id);
                                 return (
                                     <div key={w.id} onClick={() => setClientSettings(prev => {
                                         const newIds = prev.selectedWhIds.includes(w.id) ? prev.selectedWhIds.filter(id => id !== w.id) : [...prev.selectedWhIds, w.id];
                                         return newIds.length ? { ...prev, selectedWhIds: newIds } : prev;
-                                    })} className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded text-xs transition-colors ${isSelected ? (isDark ? 'bg-orange-900/40 text-orange-200' : 'bg-orange-100 text-orange-900 font-medium') : `hover:opacity-70 ${t.inputText} ${isDark ? 'hover:bg-gray-700' : 'hover:bg-slate-200'}`}`}>
-                                        {isSelected ? <CheckSquare size={14} className="text-orange-500"/> : <Square size={14} className={isDark ? "text-gray-600" : "text-slate-400"}/>}
+                                    })} className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded text-xs transition-colors ${isSelected ? (t.isDark ? 'bg-orange-900/40 text-orange-200' : 'bg-orange-100 text-orange-900 font-medium') : `hover:opacity-70 ${t.inputText} ${t.isDark ? 'hover:bg-gray-700' : 'hover:bg-slate-200'}`}`}>
+                                        {isSelected ? <CheckSquare size={14} className="text-orange-500"/> : <Square size={14} className={t.isDark ? "text-gray-600" : "text-slate-400"}/>}
                                         <span className="truncate flex-1">{w.name}</span>
-                                        {isSelected && <span className={`text-[9px] px-1 rounded ${isDark ? 'bg-black/40 text-orange-400' : 'bg-white/50 text-orange-700'}`}>x{w.wbCoeff}</span>}
+                                        {isSelected && <span className={`text-[9px] px-1 rounded ${t.isDark ? 'bg-black/40 text-orange-400' : 'bg-white/50 text-orange-700'}`}>x{w.wbCoeff}</span>}
                                     </div>
                                 );
                             })}
@@ -428,9 +475,9 @@ const FboCalculator = () => {
                     <div className={`pt-2 border-t ${t.cardBorder}`}>
                         <div className="flex justify-between mb-1">
                             <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Индекс Локализации</label>
-                            <span className={`text-xs font-bold px-2 rounded ${isDark ? 'text-orange-400 bg-orange-900/30' : 'text-orange-600 bg-orange-50'}`}>{clientSettings.locIndex}</span>
+                            <span className={`text-xs font-bold px-2 rounded ${t.isDark ? 'text-orange-400 bg-orange-900/30' : 'text-orange-600 bg-orange-50'}`}>{clientSettings.locIndex}</span>
                         </div>
-                        <input type="range" min="0.5" max="2.0" step="0.05" value={clientSettings.locIndex} onChange={(e) => setClientSettings({...clientSettings, locIndex: Number(e.target.value)})} className={`w-full accent-orange-500 h-2 rounded-lg appearance-none cursor-pointer ${isDark ? 'bg-gray-700' : 'bg-slate-200'}`} />
+                        <input type="range" min="0.5" max="2.0" step="0.05" value={clientSettings.locIndex} onChange={(e) => setClientSettings({...clientSettings, locIndex: Number(e.target.value)})} className={`w-full accent-orange-500 h-2 rounded-lg appearance-none cursor-pointer ${t.isDark ? 'bg-gray-700' : 'bg-slate-200'}`} />
                         <div className={`flex justify-between text-[9px] mt-1 ${t.subtitleText}`}><span>0.5 (Идеал)</span><span>1.0 (Норма)</span><span>2.0 (Дорого)</span></div>
                     </div>
                 </div>
@@ -449,21 +496,21 @@ const FboCalculator = () => {
                       </div>
                   ))}
                </div>
-               <div className={`flex items-center gap-3 p-2 rounded border mt-3 ${isDark ? 'bg-indigo-900/20 border-indigo-900/40' : 'bg-indigo-50 border-indigo-100'}`}>
+               <div className={`flex items-center gap-3 p-2 rounded border mt-3 ${t.isDark ? 'bg-indigo-900/20 border-indigo-900/40' : 'bg-indigo-50 border-indigo-100'}`}>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                        <label className={`text-[10px] uppercase font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-800'}`}>Штук в коробе</label>
+                        <label className={`text-[10px] uppercase font-bold ${t.isDark ? 'text-indigo-300' : 'text-indigo-800'}`}>Штук в коробе</label>
                         <button onClick={() => setAnchorMode(prev => prev === 'items' ? 'units' : 'items')} className={`text-[9px] px-1.5 rounded transition-colors ${anchorMode === 'units' ? t.lockActive : t.lockInactive}`}>
                             {anchorMode === 'units' ? <Lock size={10} /> : <Unlock size={10} />}
                         </button>
                     </div>
-                    <input type="number" value={unitsPerBox} onChange={(e) => handleUnitsPerBoxChange(e.target.value)} className={`w-full p-1.5 border rounded font-bold text-center outline-none ${t.focusRing} ${manualUnitsPerBox !== null ? (isDark ? 'bg-[#25272c] border-indigo-500 text-indigo-300' : 'bg-white border-indigo-500 text-indigo-700') : `${t.inputBg} ${t.inputBorder} ${t.inputText}`}`} />
+                    <input type="number" value={unitsPerBox} onChange={(e) => handleUnitsPerBoxChange(e.target.value)} className={`w-full p-1.5 border rounded font-bold text-center outline-none ${t.focusRing} ${manualUnitsPerBox !== null ? (t.isDark ? 'bg-[#25272c] border-indigo-500 text-indigo-300' : 'bg-white border-indigo-500 text-indigo-700') : `${t.inputBg} ${t.inputBorder} ${t.inputText}`}`} />
                   </div>
-                  <div className={`flex-1 border-l pl-3 ${isDark ? 'border-indigo-800/50' : 'border-indigo-200'}`}>
-                      <div className={`text-[10px] opacity-80 mb-1 ${isDark ? 'text-indigo-300' : 'text-indigo-400'}`}>Объем товара</div>
+                  <div className={`flex-1 border-l pl-3 ${t.isDark ? 'border-indigo-800/50' : 'border-indigo-200'}`}>
+                      <div className={`text-[10px] opacity-80 mb-1 ${t.isDark ? 'text-indigo-300' : 'text-indigo-400'}`}>Объем товара</div>
                       <div className="flex items-center gap-2">
-                          <input type="number" value={currentLiterage.toFixed(2)} onChange={(e) => handleLiterageChange(e.target.value)} className={`w-full p-1 text-sm font-bold border-b border-dashed border-indigo-400 bg-transparent outline-none focus:border-indigo-600 ${isDark ? 'text-indigo-200' : 'text-indigo-900'} ${manualLiterage !== null ? (isDark ? 'bg-indigo-900/20 rounded border-solid border-indigo-500 px-1' : 'bg-white rounded border-solid border-indigo-500 px-2') : ''}`} />
-                          <span className={`text-xs font-bold ${isDark ? 'text-indigo-400' : 'text-indigo-500'}`}>л</span>
+                          <input type="number" value={currentLiterage.toFixed(2)} onChange={(e) => handleLiterageChange(e.target.value)} className={`w-full p-1 text-sm font-bold border-b border-dashed border-indigo-400 bg-transparent outline-none focus:border-indigo-600 ${t.isDark ? 'text-indigo-200' : 'text-indigo-900'} ${manualLiterage !== null ? (t.isDark ? 'bg-indigo-900/20 rounded border-solid border-indigo-500 px-1' : 'bg-white rounded border-solid border-indigo-500 px-2') : ''}`} />
+                          <span className={`text-xs font-bold ${t.isDark ? 'text-indigo-400' : 'text-indigo-500'}`}>л</span>
                           {manualLiterage !== null && <button onClick={() => setManualLiterage(null)} className="text-indigo-400 hover:text-red-500"><X size={14}/></button>}
                       </div>
                   </div>
@@ -487,7 +534,7 @@ const FboCalculator = () => {
                    </button>
                </div>
 
-               <div className={`border rounded-lg p-3 mb-3 flex gap-3 ${isDark ? 'bg-[#22252b] border-gray-700' : 'bg-slate-50 border-slate-200'}`}>
+               <div className={`border rounded-lg p-3 mb-3 flex gap-3 ${t.isDark ? 'bg-[#22252b] border-gray-700' : 'bg-slate-50 border-slate-200'}`}>
                    <div className="flex-1">
                        <div className="flex justify-between items-center mb-1">
                            <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Всего коробов</label>
@@ -502,54 +549,55 @@ const FboCalculator = () => {
                            </button>
                            <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Товаров в партии</label>
                        </div>
-                       <input type="number" value={displayTotalItems} onChange={(e) => handleTotalItemsChange(e.target.value)} className={`w-full p-1.5 text-lg font-bold text-indigo-500 border rounded outline-none text-right ${t.focusRing} ${manualTotalItems !== null ? (isDark ? 'border-indigo-500/50 bg-indigo-900/20' : 'border-indigo-300 bg-indigo-50/20') : `${t.inputBg} ${t.inputBorder}`}`} />
+                       <input type="number" value={displayTotalItems} onChange={(e) => handleTotalItemsChange(e.target.value)} className={`w-full p-1.5 text-lg font-bold text-indigo-500 border rounded outline-none text-right ${t.focusRing} ${manualTotalItems !== null ? (t.isDark ? 'border-indigo-500/50 bg-indigo-900/20' : 'border-indigo-300 bg-indigo-50/20') : `${t.inputBg} ${t.inputBorder}`}`} />
                    </div>
                </div>
 
-               <div className={`overflow-hidden border rounded-lg ${t.cardBorder}`}>
-                   <table className="w-full text-xs text-left">
-                       <thead className={`${t.tableHeaderBg} ${t.tableHeaderText} font-semibold border-b ${t.cardBorder}`}>
-                           <tr>
-                               <th className="px-3 py-2 w-full">Склад</th>
-                               <th className="px-2 py-2 w-20 text-center">Коробов</th>
-                               <th className="px-2 py-2 w-24 text-right">Тариф (₽)</th>
-                           </tr>
-                       </thead>
-                       <tbody className={`divide-y max-h-[400px] overflow-y-auto block w-full custom-scrollbar ${isDark ? 'divide-gray-800' : 'divide-slate-100'}`}>
-                           {warehouses.map((w) => (
-                               <tr key={w.id} className={`flex w-full table-fixed items-center ${w.boxCount > 0 ? t.ffHighlightBg : t.cardBg} ${t.tableRowHover}`}>
-                                   <td className="px-3 py-2 flex-1">
-                                       <div className="flex items-center gap-1.5">
-                                           <span className={`font-medium truncate ${t.inputText}`} title={w.name}>{w.name}</span>
-                                           {w.isHub && <span className={`text-[8px] px-1 rounded flex-shrink-0 ${t.hubBadge}`} title="Хаб LITE стратегии">HUB</span>}
-                                       </div>
-                                       <div className="flex gap-2 mt-1">
-                                           <span className={`text-[9px] px-1.5 py-0.5 rounded border ${getRegionColor(w.region)}`}>{w.region}</span>
-                                           <span className={`text-[9px] px-1.5 py-0.5 rounded border ${t.wbBadge}`}>ВБ x{w.wbCoeff}</span>
-                                       </div>
-                                   </td>
-                                   <td className="px-2 py-2 w-20 flex items-center justify-center">
-                                       <input 
-                                          type="number" 
-                                          min="0"
-                                          value={w.boxCount} 
-                                          onChange={(e) => handleBoxChange(w.id, e.target.value)}
-                                          className={`w-14 p-1 text-center border rounded font-bold outline-none ${t.focusRing} 
-                                            ${w.boxCount > 0 ? (isDark ? 'bg-indigo-900/20 border-indigo-500/50 text-indigo-300' : 'bg-white border-indigo-300 text-indigo-700') : `${t.emptyInputBg} ${t.emptyInputBorder} ${t.emptyInputText}`}`}
-                                       />
-                                   </td>
-                                   <td className="px-2 py-2 w-24 text-right flex items-center justify-end">
-                                       <input 
-                                          type="number"
-                                          value={w.logisticCostBox}
-                                          onChange={(e) => handleLogisticCostChange(w.id, e.target.value)}
-                                          className={`w-16 p-1 text-right border border-transparent rounded text-sm font-medium outline-none transition-all bg-transparent ${t.inputText} focus:ring-2 ${t.focusRing} ${isDark ? 'hover:border-gray-600 focus:bg-[#25262b]' : 'hover:border-slate-300 focus:bg-white'}`}
-                                       />
-                                   </td>
-                               </tr>
-                           ))}
-                       </tbody>
-                   </table>
+               <div className={`overflow-hidden border rounded-lg flex flex-col ${t.cardBorder}`}>
+                   {/* HEADER ROW */}
+                   <div className={`flex items-center px-3 py-2 border-b text-xs font-semibold ${t.tableHeaderBg} ${t.tableHeaderText} ${t.cardBorder}`}>
+                       <div className="flex-1">Склад</div>
+                       <div className="w-20 text-center px-2">Коробов</div>
+                       <div className="w-24 text-right px-2">Тариф (₽)</div>
+                   </div>
+                   
+                   {/* BODY ROWS */}
+                   <div className={`overflow-y-auto max-h-[400px] custom-scrollbar divide-y ${t.isDark ? 'divide-gray-800' : 'divide-slate-100'}`}>
+                       {warehouses.map((w) => (
+                           <div key={w.id} className={`flex items-center px-3 py-2 ${w.boxCount > 0 ? t.ffHighlightBg : t.cardBg} ${t.tableRowHover}`}>
+                               <div className="flex-1 min-w-0">
+                                   <div className="flex items-center gap-1.5">
+                                       <span className={`font-medium truncate ${t.inputText}`} title={w.name}>{w.name}</span>
+                                       {w.isHub && <span className={`text-[8px] px-1 rounded flex-shrink-0 ${t.isDark ? 'bg-gray-800 text-gray-400' : 'bg-slate-200 text-slate-600'}`} title="Хаб LITE стратегии">HUB</span>}
+                                   </div>
+                                   <div className="flex gap-2 mt-1">
+                                       <span className={`text-[9px] px-1.5 py-0.5 rounded border ${getRegionColor(w.region)}`}>{w.region}</span>
+                                       <span className={`text-[9px] px-1.5 py-0.5 rounded border ${t.wbBadge}`}>ВБ x{w.wbCoeff}</span>
+                                   </div>
+                               </div>
+                               <div className="w-20 flex justify-center px-2">
+                                   <input 
+                                      type="number" 
+                                      min="0"
+                                      value={w.boxCount} 
+                                      onChange={(e) => handleBoxChange(w.id, e.target.value)}
+                                      className={`w-14 p-1 text-center border rounded font-bold outline-none ${t.focusRing} 
+                                        ${t.isDark 
+                                            ? (w.boxCount > 0 ? 'bg-indigo-900/20 border-indigo-500/50 text-indigo-300' : `${t.inputBg} ${t.inputBorder} ${t.inputText}`) 
+                                            : (w.boxCount > 0 ? 'bg-white border-indigo-300 text-indigo-700' : 'bg-slate-50 border-slate-200 text-slate-400 focus:bg-white')}`}
+                                   />
+                               </div>
+                               <div className="w-24 flex justify-end px-2">
+                                   <input 
+                                      type="number"
+                                      value={w.logisticCostBox}
+                                      onChange={(e) => handleLogisticCostChange(w.id, e.target.value)}
+                                      className={`w-16 p-1 text-right border border-transparent rounded text-sm font-medium outline-none transition-all bg-transparent ${t.inputText} focus:ring-2 ${t.focusRing} ${t.isDark ? 'hover:border-gray-600 focus:bg-[#25262b]' : 'hover:border-slate-300 focus:bg-white'}`}
+                                   />
+                               </div>
+                           </div>
+                       ))}
+                   </div>
                </div>
             </div>
             
@@ -559,7 +607,8 @@ const FboCalculator = () => {
                     <summary className={`font-semibold cursor-pointer flex items-center gap-2 ${t.inputText}`}>
                         <DollarSign size={14} className="text-green-500" /> Настройки тарифов фулфилмента
                     </summary>
-                    <div className={`mt-3 space-y-4 pl-2 border-l-2 ${isDark ? 'border-gray-800' : 'border-slate-100'}`}>
+                    <div className={`mt-3 space-y-4 pl-2 border-l-2 ${t.isDark ? 'border-gray-800' : 'border-slate-100'}`}>
+                        {/* Группа 1: За штуку */}
                         <div>
                             <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">За единицу товара (₽/шт)</div>
                             <div className="space-y-1">
@@ -567,6 +616,8 @@ const FboCalculator = () => {
                                 <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Спецификация</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
                             </div>
                         </div>
+                        
+                        {/* Группа 2: За короб */}
                         <div>
                              <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">За короб (₽/кор)</div>
                              <div className="space-y-1">
@@ -577,6 +628,7 @@ const FboCalculator = () => {
                     </div>
                 </details>
             </div>
+
           </div>
 
           {/* RIGHT: Results */}
@@ -616,10 +668,10 @@ const FboCalculator = () => {
                         <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }} barSize={30}>
                             <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={t.chartGrid} />
                             <XAxis type="number" hide />
-                            <YAxis type="category" dataKey="name" width={140} tick={{fontSize: 11, fontWeight: 600, fill: isDark ? '#9ca3af' : '#334155'}} />
+                            <YAxis type="category" dataKey="name" width={140} tick={{fontSize: 11, fontWeight: 600, fill: t.isDark ? '#9ca3af' : '#334155'}} />
                             <Tooltip contentStyle={{ backgroundColor: t.chartTooltipBg, border: `1px solid ${isDark ? '#374151' : '#e5e7eb'}`, borderRadius: '0.5rem', color: t.chartTooltipText }} />
-                            <Legend wrapperStyle={{fontSize: '12px', color: isDark ? '#9ca3af' : '#1f2937'}}/>
-                            <Bar name="Фулфилмент + Транзит" dataKey="Фулфилмент (Услуги + Доставка)" stackId="a" fill={t.ffBarColor} radius={[0, 0, 0, 0]} />
+                            <Legend wrapperStyle={{fontSize: '12px', color: t.isDark ? '#9ca3af' : '#1f2937'}}/>
+                            <Bar name="Фулфилмент" dataKey="Фулфилмент" stackId="a" fill={t.ffBarColor} radius={[0, 0, 0, 0]} />
                             <Bar name="Тариф Wildberries" dataKey="Логистика ВБ" stackId="a" fill={t.wbBarColor} radius={[0, 4, 4, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
@@ -649,7 +701,7 @@ const FboCalculator = () => {
                                 <div className={`text-xs ${t.subtitleText}`}>Тариф × Коэф. склада × Индекс Лок.</div>
                             </td>
                             <td className="px-5 py-3 text-right font-medium">{Math.round(clientScenario.wbLogisticsUnit * totalItems).toLocaleString()} ₽</td>
-                            <td className={`px-5 py-3 text-right font-bold ${isDark ? 'text-green-400' : 'text-green-600'} ${t.ffHighlightBg}`}>{Math.round(distributedScenario.wbLogisticsUnit * totalItems).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right font-bold ${t.isDark ? 'text-green-400' : 'text-green-600'} ${t.ffHighlightBg}`}>{Math.round(distributedScenario.wbLogisticsUnit * totalItems).toLocaleString()} ₽</td>
                         </tr>
                         <tr>
                             <td className="px-5 py-3">
@@ -670,7 +722,7 @@ const FboCalculator = () => {
                         <tr className={`font-bold ${t.tableHeaderBg}`}>
                             <td className="px-5 py-3">ИТОГО</td>
                             <td className="px-5 py-3 text-right">{Math.round(clientScenario.totalCost).toLocaleString()} ₽</td>
-                            <td className={`px-5 py-3 text-right ${t.ffHighlightText} ${isDark ? 'bg-indigo-900/20' : 'bg-indigo-50'}`}>{Math.round(distributedScenario.totalCost).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right ${t.ffHighlightText} ${t.isDark ? 'bg-indigo-900/20' : 'bg-indigo-50'}`}>{Math.round(distributedScenario.totalCost).toLocaleString()} ₽</td>
                         </tr>
                     </tbody>
                 </table>
