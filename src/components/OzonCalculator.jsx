@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Moon, Sun } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Moon, Sun, Lock, Unlock, X, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const OzonCalculator = () => {
@@ -8,16 +8,23 @@ const OzonCalculator = () => {
 
   // --- 1. ПАРАМЕТРЫ ТОВАРА ---
   const [product, setProduct] = useState({
-    price: 1800, // Цена продажи (важно для комиссии!)
+    price: 1800, // Цена продажи
     cost: 600,   // Себестоимость
-    width: 20,   // см
-    height: 30,  // см
-    length: 10,  // см
-    weight: 0.5, // кг
+    width: 20,
+    height: 30,
+    length: 10,
+    weight: 0.5,
   });
 
-  // Ручное переопределение количества штук в коробе
+  // Ручное переопределение количества штук в коробе и объема
   const [manualUnitsPerBox, setManualUnitsPerBox] = useState(null);
+  const [manualLiterage, setManualLiterage] = useState(null);
+  
+  // Режим фиксации: 'units' (короба/вложения) или 'items' (итого штук)
+  const [anchorMode, setAnchorMode] = useState('items');
+
+  // Режим риска: 'normal' (обычный спрос) или 'high' (стресс-тест дальними заказами)
+  const [riskMode, setRiskMode] = useState('normal');
 
   // --- 2. ТАРИФЫ ФУЛФИЛМЕНТА И ДОСТАВКИ ---
   const [ffRates, setFfRates] = useState({
@@ -28,7 +35,7 @@ const OzonCalculator = () => {
     deliveryToRfc: 140, // Фиксированная доставка до РФЦ за короб
   });
 
-  // --- 3. ТАРИФЫ ОЗОН (НОВЫЕ ПРАВИЛА 2025) ---
+  // --- 3. ТАРИФЫ ОЗОН ---
   const [ozonTariffs, setOzonTariffs] = useState({
     logisticsBase: 63, // База за 5 литров
     logisticsLiter: 7, // За каждый лишний литр
@@ -47,7 +54,7 @@ const OzonCalculator = () => {
     { id: 'voronezh', name: 'Воронеж', vrdcBoxRate: 160, demandShare: 3, enabled: false, remoteHours: 40, boxCount: 0 },
     { id: 'belarus', name: 'Беларусь', vrdcBoxRate: 350, demandShare: 2, enabled: false, remoteHours: 72, boxCount: 0 },
     { id: 'kazakhstan', name: 'Казахстан', vrdcBoxRate: 400, demandShare: 2, enabled: false, remoteHours: 96, boxCount: 0 },
-    { id: 'dv', name: 'Дальний Восток', vrdcBoxRate: 450, demandShare: 2, enabled: false, remoteHours: 150, boxCount: 0 },
+    { id: 'dv', name: 'Дальний Восток', vrdcBoxRate: 450, demandShare: 2, enabled: false, remoteHours: 150, boxCount: 0 }, // Самый дальний для стресс-теста
     { id: 'krasnoyarsk', name: 'Красноярск', vrdcBoxRate: 320, demandShare: 2, enabled: false, remoteHours: 100, boxCount: 0 },
     { id: 'ufa', name: 'Уфа', vrdcBoxRate: 200, demandShare: 2, enabled: false, remoteHours: 60, boxCount: 0 },
     { id: 'tyumen', name: 'Тюмень', vrdcBoxRate: 250, demandShare: 1, enabled: false, remoteHours: 75, boxCount: 0 },
@@ -63,12 +70,17 @@ const OzonCalculator = () => {
 
   const [clusters, setClusters] = useState(initialClusters);
   
+  // Состояние: какие кластеры клиент использует СЕЙЧАС (для расчета "До")
+  const [clientSelectedClusters, setClientSelectedClusters] = useState(['msk']);
+
   // --- ВЫЧИСЛЕНИЯ ПАРТИИ ---
   const itemLiterage = (product.width * product.height * product.length) / 1000;
+  const currentLiterage = manualLiterage !== null ? manualLiterage : itemLiterage;
+
   const calculatedUnitsPerBox = useMemo(() => {
-    if (itemLiterage <= 0) return 0;
-    return Math.floor((96 / itemLiterage) * 0.95) || 1;
-  }, [itemLiterage]);
+    if (currentLiterage <= 0) return 0;
+    return Math.floor((96 / currentLiterage) * 0.95) || 1;
+  }, [currentLiterage]);
   const unitsPerBox = manualUnitsPerBox !== null ? manualUnitsPerBox : calculatedUnitsPerBox;
 
   const currentTotalBoxes = useMemo(() => clusters.reduce((sum, c) => sum + c.boxCount, 0), [clusters]);
@@ -142,6 +154,15 @@ const OzonCalculator = () => {
       distributeBoxes(newTotalBoxes, 'current_ratio');
   };
 
+  const handleUnitsPerBoxChange = (val) => {
+      setManualUnitsPerBox(Number(val));
+  };
+
+  const handleLiterageChange = (val) => {
+      const lit = parseFloat(val);
+      setManualLiterage(isNaN(lit) ? null : lit);
+  };
+
   const handleAutoMax = () => distributeBoxes(currentTotalBoxes > 0 ? currentTotalBoxes : 15, 'demand_max');
   const handleAutoLite = () => distributeBoxes(currentTotalBoxes > 0 ? currentTotalBoxes : 15, 'demand_lite');
 
@@ -160,20 +181,79 @@ const OzonCalculator = () => {
       }));
   };
 
+  const toggleClientCluster = (id) => {
+      setClientSelectedClusters(prev => {
+          if (prev.includes(id)) {
+              return prev.filter(item => item !== id);
+          } else {
+              return [...prev, id];
+          }
+      });
+  };
+
+  useEffect(() => {
+      if (anchorMode === 'items' && displayTotalItems > 0) {
+          const newBoxes = Math.ceil(displayTotalItems / (unitsPerBox || 1));
+          if (newBoxes !== currentTotalBoxes) {
+              distributeBoxes(newBoxes, 'current_ratio');
+          }
+      } else {
+          setManualTotalItems(null);
+      }
+  }, [unitsPerBox]);
+
   // --- РАСЧЕТ МЕТРИК ---
   const distribution = useMemo(() => {
     let totalWeightedTimeCurrent = 0;
     let totalWeightedTimeTarget = 0;
+    
+    // Эмуляция риска: если риск высокий, мы "подмешиваем" заказы с Дальнего Востока (id: 'dv')
+    // Допустим, 10% заказов внезапно идут с ДВ (150ч), если товара там нет.
+    let riskFactor = 0; // 0 = нет риска
+    if (riskMode === 'high') riskFactor = 0.1; // 10% заказов это "выбросы" с ДВ
+
+    // Нормализация долей спроса с учетом риск-фактора
     const totalGlobalDemand = clusters.reduce((sum, c) => sum + c.demandShare, 0);
+    
+    // Находим "проблемный" кластер для стресс-теста (Дальний Восток)
+    const riskyCluster = clusters.find(c => c.id === 'dv');
+    const riskyTime = riskyCluster ? riskyCluster.remoteHours : 150;
+
+    let accumulatedWeight = 0;
 
     clusters.forEach(c => {
-        const weight = c.demandShare / totalGlobalDemand;
-        const timeCurrent = c.id === 'msk' ? 28 : c.remoteHours;
+        // Базовый вес региона
+        let weight = c.demandShare / totalGlobalDemand;
+        
+        // В режиме риска мы "разбавляем" нормальные веса, добавляя вес к "плохому" сценарию
+        if (riskMode === 'high') {
+            weight = weight * (1 - riskFactor); 
+        }
+        accumulatedWeight += weight;
+
+        // Сценарий 1 (Текущий): Проверяем, возит ли клиент в этот кластер
+        const isClientStock = clientSelectedClusters.includes(c.id);
+        const timeCurrent = isClientStock ? 28 : c.remoteHours; 
         totalWeightedTimeCurrent += timeCurrent * weight;
+
+        // Сценарий 2 (Целевой): Проверяем, есть ли короба в распределении
         const hasStock = c.boxCount > 0;
-        const timeTarget = hasStock ? 28 : c.remoteHours;
+        const timeTarget = hasStock ? 28 : c.remoteHours; 
         totalWeightedTimeTarget += timeTarget * weight;
     });
+
+    // Добавляем влияние риска (отдельно 10% заказов с ДВ)
+    if (riskMode === 'high') {
+        // Для "Текущего": если клиент не возит на ДВ, он получает 150ч за эти 10% заказов
+        const clientHasRiskCover = clientSelectedClusters.includes('dv');
+        const timeRiskCurrent = clientHasRiskCover ? 28 : riskyTime;
+        totalWeightedTimeCurrent += timeRiskCurrent * riskFactor;
+
+        // Для "Целевого": если мы распределили на ДВ, мы получаем 28ч, иначе 150ч
+        const targetHasRiskCover = clusters.find(c => c.id === 'dv' && c.boxCount > 0);
+        const timeRiskTarget = targetHasRiskCover ? 28 : riskyTime;
+        totalWeightedTimeTarget += timeRiskTarget * riskFactor;
+    }
 
     let vrdcTotalCost = 0;
     clusters.forEach(c => {
@@ -186,7 +266,7 @@ const OzonCalculator = () => {
         current: { svd: totalWeightedTimeCurrent },
         target: { svd: totalWeightedTimeTarget, vrdcCost: vrdcTotalCost }
     };
-  }, [clusters]);
+  }, [clusters, clientSelectedClusters, riskMode]);
 
   const getTariffParams = (hours) => {
       if (hours <= 29) return { coeff: 1.0, commission: 0 };
@@ -207,7 +287,7 @@ const OzonCalculator = () => {
   const calculateOzonLogistics = (svd) => {
       const { coeff, commission } = getTariffParams(svd);
       let base = ozonTariffs.logisticsBase;
-      if (itemLiterage > 5) base += (itemLiterage - 5) * ozonTariffs.logisticsLiter;
+      if (currentLiterage > 5) base += (currentLiterage - 5) * ozonTariffs.logisticsLiter;
       
       const logisticsCost = (base * coeff * displayTotalItems);
       const commissionCost = displayTotalItems * (product.price * (commission / 100));
@@ -242,30 +322,61 @@ const OzonCalculator = () => {
     },
   ];
 
+  // --- Theme Helpers ---
+  const theme = {
+    bg: isDarkMode ? 'bg-zinc-950' : 'bg-slate-50',
+    card: isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-slate-200',
+    text: isDarkMode ? 'text-zinc-200' : 'text-slate-800',
+    inputBg: isDarkMode ? 'bg-zinc-950 border-zinc-700 text-zinc-200' : 'bg-white border-slate-200 text-slate-700',
+    primary: isDarkMode ? 'text-blue-400' : 'text-blue-700',
+    secondary: isDarkMode ? 'text-slate-400' : 'text-slate-500',
+    highlight: isDarkMode ? 'bg-blue-900 border-blue-900' : 'bg-blue-50 border-blue-100',
+    tableHeaderBg: isDarkMode ? 'bg-zinc-900 border-zinc-800' : 'bg-slate-50 border-slate-200',
+    tableRowActive: isDarkMode ? 'bg-blue-950' : 'bg-blue-50',
+    profitPositive: isDarkMode ? 'bg-emerald-950 border-emerald-900 text-emerald-400' : 'bg-emerald-50 border-emerald-100 text-emerald-700',
+    profitNegative: isDarkMode ? 'bg-orange-950 border-orange-900 text-orange-400' : 'bg-orange-50 border-orange-100 text-orange-700',
+  };
+
+  const t = {
+      cardBg: isDarkMode ? 'bg-zinc-900' : 'bg-white',
+      cardBorder: isDarkMode ? 'border-zinc-800' : 'border-slate-200',
+      headerTitle: isDarkMode ? 'text-blue-300' : 'text-blue-900',
+      subtitleText: isDarkMode ? 'text-zinc-500' : 'text-slate-400',
+      inputBg: isDarkMode ? 'bg-zinc-950' : 'bg-white',
+      inputBorder: isDarkMode ? 'border-zinc-700' : 'border-slate-200',
+      inputText: isDarkMode ? 'text-zinc-200' : 'text-slate-700',
+      focusRing: 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+  };
+
+  // --- LOGIC FOR COLORED BLOCK ---
+  const isTargetBetter = distribution.target.svd < distribution.current.svd;
+  
+  const targetBlockStyles = isTargetBetter
+    ? (isDarkMode ? 'bg-emerald-950 border-emerald-900 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-700')
+    : (isDarkMode ? 'bg-zinc-900 border-zinc-800 text-zinc-400' : 'bg-slate-50 border-slate-200 text-slate-600');
+
+  const targetValueStyles = isTargetBetter
+    ? (isDarkMode ? 'text-emerald-400' : 'text-emerald-600')
+    : (isDarkMode ? 'text-zinc-200' : 'text-slate-800');
+
   return (
     <div className={isDarkMode ? 'dark' : ''}>
-    <div className="p-4 bg-slate-50 dark:bg-zinc-950 min-h-screen font-sans text-slate-800 dark:text-zinc-200 transition-colors duration-200">
+    <div className={`p-4 ${theme.bg} min-h-screen font-sans ${theme.text} transition-colors duration-200`}>
       <div className="max-w-7xl mx-auto">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-blue-900 dark:text-blue-400 flex items-center gap-2">
+            <h1 className={`text-2xl font-bold ${theme.primary} flex items-center gap-2`}>
                 <Truck className="fill-yellow-400 text-blue-700 dark:text-blue-500" /> Калькулятор выгоды Ozon FBO
             </h1>
-            <p className="text-slate-500 dark:text-zinc-400 text-sm">Учитываем СВД (Среднее Время Доставки) и штрафы</p>
+            <p className={`text-sm ${theme.secondary}`}>Учитываем СВД (Среднее Время Доставки) и штрафы</p>
           </div>
           <div className="flex gap-2">
-             <button 
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className="bg-white dark:bg-zinc-900 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 transition-colors"
-             >
+             <button onClick={() => setIsDarkMode(!isDarkMode)} className={`bg-white dark:bg-zinc-900 px-3 py-2 rounded-lg text-sm font-medium border ${theme.card} hover:bg-slate-50 dark:hover:bg-zinc-800 ${theme.secondary} transition-colors`}>
                 {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
              </button>
-             <button 
-                onClick={() => {setClusters(initialClusters); setManualTotalItems(null);}}
-                className="bg-white dark:bg-zinc-900 px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-300 flex items-center gap-2 transition-colors"
-             >
+             <button onClick={() => {setClusters(initialClusters); setManualTotalItems(null); setManualLiterage(null); setManualUnitsPerBox(null); setRiskMode('normal');}} className={`bg-white dark:bg-zinc-900 px-4 py-2 rounded-lg text-sm font-medium border ${theme.card} hover:bg-slate-50 dark:hover:bg-zinc-800 ${theme.secondary} flex items-center gap-2 transition-colors`}>
                 <RotateCcw size={16} /> Сброс
              </button>
           </div>
@@ -276,147 +387,239 @@ const OzonCalculator = () => {
           {/* LEFT COLUMN */}
           <div className="lg:col-span-5 space-y-4">
             
-            {/* 1. СТАТИСТИКА ВРЕМЕНИ */}
-            <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl shadow-sm border border-blue-100 dark:border-blue-900/30 ring-1 ring-blue-50 dark:ring-blue-900/10 relative overflow-hidden transition-colors">
-                <div className="absolute top-0 right-0 w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-bl-full -mr-8 -mt-8 opacity-50"></div>
-                <h3 className="font-bold text-sm text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2 relative z-10">
-                    <Clock size={16} /> СВД (Среднее время доставки)
+            {/* 1. БЛОК ВЫБОРА */}
+            <div className={`p-4 rounded-xl border ${theme.card} relative overflow-hidden transition-colors`}>
+                <h3 className={`font-bold text-sm ${theme.primary} mb-3 flex items-center gap-2`}>
+                    <Settings size={16} /> Текущая ситуация (Выбор складов)
                 </h3>
                 
-                <div className="grid grid-cols-2 gap-4 relative z-10">
-                    <div className="bg-slate-50 dark:bg-zinc-950 p-3 rounded-lg border border-slate-200 dark:border-zinc-800">
-                        <div className="text-[10px] uppercase font-bold text-slate-500 dark:text-zinc-500 mb-1">Только Москва</div>
-                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">{Math.round(distribution.current.svd)} ч</div>
-                        <div className="text-xs mt-1 space-y-0.5">
-                             <div className="flex justify-between dark:text-zinc-400"><span>Коэфф:</span> <b>x{currentScenario.params.coeff}</b></div>
-                             <div className="flex justify-between text-red-600 dark:text-red-400"><span>Штраф:</span> <b>{currentScenario.params.commission}%</b></div>
+                <div className="space-y-3">
+                    <div>
+                        <label className={`text-[10px] uppercase font-bold ${theme.secondary} mb-1 block`}>Куда возите сейчас?</label>
+                        <div className={`max-h-32 overflow-y-auto border ${theme.card} rounded-lg p-1 custom-scrollbar`}>
+                            {clusters.map(c => {
+                                const isSelected = clientSelectedClusters.includes(c.id);
+                                return (
+                                    <div 
+                                        key={c.id} 
+                                        onClick={() => toggleClientCluster(c.id)}
+                                        className={`flex items-center gap-2 px-2 py-1.5 cursor-pointer rounded text-xs transition-colors ${isSelected ? 'bg-orange-100 dark:bg-orange-900 text-orange-900 dark:text-orange-300 font-medium' : 'hover:bg-slate-200 dark:hover:bg-zinc-800'}`}
+                                    >
+                                        {isSelected ? <CheckSquare size={14} className="text-orange-600 dark:text-orange-400"/> : <Square size={14} className="text-slate-400 dark:text-zinc-600"/>}
+                                        <span className="truncate flex-1">{c.name}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
-                    </div>
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-200 dark:border-emerald-900/30">
-                        <div className="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 mb-1">С распределением</div>
-                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{Math.round(distribution.target.svd)} ч</div>
-                        <div className="text-xs mt-1 space-y-0.5 text-emerald-800 dark:text-emerald-300">
-                             <div className="flex justify-between"><span>Коэфф:</span> <b>x{targetScenario.params.coeff}</b></div>
-                             <div className="flex justify-between"><span>Штраф:</span> <b>{targetScenario.params.commission}%</b></div>
+                        <div className={`text-[10px] ${theme.secondary} mt-1`}>
+                            Выбрано: {clientSelectedClusters.length}. Влияет на "Только Центр".
                         </div>
                     </div>
                 </div>
             </div>
 
+            {/* 1.5. СТАТИСТИКА ВРЕМЕНИ + СИМУЛЯТОР */}
+            <div className={`p-4 rounded-xl border ${theme.card} relative overflow-hidden transition-colors`}>
+                <h3 className={`font-bold text-sm ${theme.primary} mb-3 flex items-center justify-between relative z-10`}>
+                    <span className="flex items-center gap-2"><Clock size={16} /> СВД (Среднее время доставки)</span>
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-4 relative z-10 mb-4">
+                    <div className={`bg-slate-50 dark:bg-zinc-950 p-3 rounded-lg border ${isDarkMode ? 'border-zinc-800' : 'border-slate-200'}`}>
+                        <div className={`text-[10px] uppercase font-bold ${theme.secondary} mb-1`}>Сейчас (Выбранное)</div>
+                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">{Math.round(distribution.current.svd)} ч</div>
+                        <div className="text-xs mt-1 space-y-0.5">
+                             <div className={`flex justify-between ${isDarkMode ? 'text-zinc-400' : ''}`}><span>Коэфф:</span> <b>x{currentScenario.params.coeff}</b></div>
+                             <div className="flex justify-between text-red-600 dark:text-red-400"><span>Штраф:</span> <b>{currentScenario.params.commission}%</b></div>
+                        </div>
+                    </div>
+                    {/* CONDITIONAL STYLING */}
+                    <div className={`p-3 rounded-lg border ${targetBlockStyles}`}>
+                        <div className="text-[10px] uppercase font-bold mb-1 opacity-80">С распределением</div>
+                        <div className={`text-2xl font-bold ${targetValueStyles}`}>{Math.round(distribution.target.svd)} ч</div>
+                        <div className="text-xs mt-1 space-y-0.5 opacity-90">
+                             <div className="flex justify-between"><span>Коэфф:</span> <b>x{targetScenario.params.coeff}</b></div>
+                             <div className="flex justify-between"><span>Штраф:</span> <b>{targetScenario.params.commission}%</b></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Блок Симулятора Рисков */}
+                <div className={`pt-3 border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-zinc-300">
+                            {riskMode === 'high' ? <ShieldAlert size={14} className="text-red-500"/> : <ShieldCheck size={14} className="text-emerald-500"/>}
+                            Симулятор рисков (Дальние заказы)
+                        </div>
+                        <div className="flex bg-slate-100 dark:bg-zinc-800 rounded p-0.5">
+                            <button 
+                                onClick={() => setRiskMode('normal')}
+                                className={`px-2 py-0.5 text-[10px] rounded transition-colors ${riskMode === 'normal' ? 'bg-white dark:bg-zinc-600 shadow-sm font-bold text-slate-800 dark:text-zinc-100' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700'}`}
+                            >
+                                Норма
+                            </button>
+                            <button 
+                                onClick={() => setRiskMode('high')}
+                                className={`px-2 py-0.5 text-[10px] rounded transition-colors ${riskMode === 'high' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700'}`}
+                            >
+                                Риск (7 дней)
+                            </button>
+                        </div>
+                    </div>
+                    {riskMode === 'high' && (
+                        <div className={`text-[10px] p-2 rounded bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-300 leading-tight`}>
+                            ⚠️ <b>Стресс-тест:</b> Моделируем 10% случайных заказов с Дальнего Востока (150 часов). Если товара там нет, СВД резко ухудшится.
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* 2. ТОВАР */}
-            <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-zinc-800 transition-colors">
-               <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-300 mb-3 flex items-center gap-2">
+            <div className={`${t.cardBg} p-4 rounded-xl border ${t.cardBorder}`}>
+               <h3 className={`font-semibold text-sm ${t.headerTitle} mb-3 flex items-center gap-2`}>
                 <Box size={16} /> Товар (Габариты и Цена)
               </h3>
-               <div className="flex items-center gap-2 mb-2">
+               <div className={`flex items-center gap-2 mb-2 ${manualLiterage !== null ? 'opacity-50 pointer-events-none' : ''}`}>
                   <div className="flex-1">
-                     <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">Длина</label>
-                     <input type="number" value={product.length} onChange={(e) => setProduct({...product, length: Number(e.target.value)})} className="w-full p-1 border rounded text-center text-sm bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-200" />
+                     <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Длина</label>
+                     <input type="number" value={product.length} onChange={(e) => setProduct({...product, length: Number(e.target.value)})} className={`w-full p-1 border rounded text-center text-sm ${t.inputBg} ${t.inputBorder} ${t.inputText} ${t.focusRing}`} />
+                  </div>
+                  <span className={`mt-4 ${t.subtitleText}`}>x</span>
+                  <div className="flex-1">
+                     <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Ширина</label>
+                     <input type="number" value={product.width} onChange={(e) => setProduct({...product, width: Number(e.target.value)})} className={`w-full p-1 border rounded text-center text-sm ${t.inputBg} ${t.inputBorder} ${t.inputText} ${t.focusRing}`} />
                   </div>
                   <div className="flex-1">
-                     <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">Ширина</label>
-                     <input type="number" value={product.width} onChange={(e) => setProduct({...product, width: Number(e.target.value)})} className="w-full p-1 border rounded text-center text-sm bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-200" />
-                  </div>
-                  <div className="flex-1">
-                     <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">Высота</label>
-                     <input type="number" value={product.height} onChange={(e) => setProduct({...product, height: Number(e.target.value)})} className="w-full p-1 border rounded text-center text-sm bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-200" />
+                     <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Высота</label>
+                     <input type="number" value={product.height} onChange={(e) => setProduct({...product, height: Number(e.target.value)})} className={`w-full p-1 border rounded text-center text-sm ${t.inputBg} ${t.inputBorder} ${t.inputText} ${t.focusRing}`} />
                   </div>
                </div>
                
                <div className="mb-2">
-                   <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500">Цена товара</label>
+                   <label className={`text-[10px] uppercase font-bold ${t.subtitleText}`}>Цена товара</label>
                    <div className="relative">
-                        <input type="number" value={product.price} onChange={(e) => setProduct({...product, price: Number(e.target.value)})} className="w-full p-1.5 border rounded pl-8 font-bold text-slate-700 dark:text-zinc-200 bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700" />
-                        <span className="absolute left-2 top-1.5 text-slate-400 dark:text-zinc-500">₽</span>
+                        <input type="number" value={product.price} onChange={(e) => setProduct({...product, price: Number(e.target.value)})} className={`w-full p-1.5 border rounded pl-8 font-bold ${t.inputText} ${t.inputBg} ${t.inputBorder} ${t.focusRing}`} />
+                        <span className={`absolute left-2 top-1.5 ${t.subtitleText}`}>₽</span>
                    </div>
                </div>
                
                {/* Ручной ввод штук в коробе */}
-               <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 p-2 rounded border border-blue-100 dark:border-blue-900/30 mt-2">
+               <div className={`flex items-center gap-3 ${isDarkMode ? 'bg-blue-950 border-blue-900' : 'bg-blue-50 border-blue-100'} p-2 rounded border mt-2`}>
                   <div className="flex-1">
-                    <label className="text-[10px] uppercase font-bold text-blue-800 dark:text-blue-300 mb-1 block">Штук в коробе</label>
+                    <div className="flex items-center justify-between mb-1">
+                        <label className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-blue-300' : 'text-blue-800'}`}>Штук в коробе</label>
+                        <button 
+                            onClick={() => setAnchorMode('units')}
+                            className={`text-[9px] px-1.5 rounded transition-colors ${anchorMode === 'units' ? 'bg-blue-600 text-white' : `text-blue-400 hover:bg-blue-100 ${isDarkMode ? 'hover:bg-blue-900' : ''}`}`}
+                            title={anchorMode === 'units' ? 'Режим: Вложения зафиксированы' : 'Включить режим фиксированных вложений'}
+                        >
+                            {anchorMode === 'units' ? <Lock size={10} /> : <Unlock size={10} />}
+                        </button>
+                    </div>
                     <div className="flex items-center gap-2">
                         <input 
                             type="number" 
                             value={unitsPerBox} 
-                            onChange={(e) => setManualUnitsPerBox(Number(e.target.value))}
-                            className={`w-full p-1.5 border rounded font-bold text-center outline-none focus:ring-2 focus:ring-blue-500 dark:bg-zinc-950 ${manualUnitsPerBox !== null ? 'bg-white border-blue-400 text-blue-700 dark:text-blue-400 dark:border-blue-700' : 'bg-slate-50 border-slate-200 dark:border-zinc-700 text-slate-600 dark:text-zinc-400'}`}
+                            onChange={(e) => handleUnitsPerBoxChange(e.target.value)}
+                            className={`w-full p-1.5 border rounded font-bold text-center outline-none ${t.focusRing} 
+                            ${manualUnitsPerBox !== null ? `${t.cardBg} border-blue-500 text-blue-700 ${isDarkMode ? 'text-blue-400 border-blue-700' : ''}` : `${t.inputBg} ${t.inputBorder} ${t.inputText}`}`}
                         />
                         {manualUnitsPerBox !== null && (
                             <button 
                                 onClick={() => setManualUnitsPerBox(null)}
                                 title="Вернуть авторасчет"
-                                className="p-1.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 rounded hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-500 dark:text-zinc-400"
+                                className={`p-1.5 ${t.cardBg} border ${t.inputBorder} rounded hover:bg-opacity-80 text-slate-400`}
                             >
                                 <RefreshCw size={14} />
                             </button>
                         )}
                     </div>
                   </div>
-                  <div className="flex-1 border-l border-blue-200 dark:border-blue-800 pl-3">
-                      <div className="text-[10px] text-blue-800 dark:text-blue-300 opacity-70">Объем товара</div>
-                      <div className="font-semibold text-sm text-blue-900 dark:text-blue-200">{itemLiterage.toFixed(2)} л</div>
+                  <div className={`flex-1 border-l pl-3 ${isDarkMode ? 'border-blue-800' : 'border-blue-200'}`}>
+                      <div className={`text-[10px] ${isDarkMode ? 'text-blue-300' : 'text-blue-800'} opacity-70 mb-1`}>Объем товара</div>
+                      <div className="flex items-center gap-2">
+                          <input 
+                            type="number"
+                            value={currentLiterage.toFixed(2)}
+                            onChange={(e) => handleLiterageChange(e.target.value)}
+                            className={`w-full p-1 text-sm font-bold text-blue-900 dark:text-blue-200 border-b border-dashed border-blue-300 dark:border-blue-700 bg-transparent outline-none focus:border-blue-600 ${manualLiterage !== null ? 'bg-white dark:bg-zinc-800 rounded border-solid border-blue-500 px-2' : ''}`}
+                          />
+                          <span className={`text-xs ${isDarkMode ? 'text-blue-300' : 'text-blue-800'} font-bold`}>л</span>
+                          {manualLiterage !== null && (
+                              <button onClick={() => setManualLiterage(null)} className="text-blue-400 hover:text-red-500">
+                                  <X size={14}/>
+                              </button>
+                          )}
+                      </div>
                   </div>
                </div>
             </div>
 
             {/* 3. КЛАСТЕРЫ */}
-            <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-zinc-800 flex-grow flex flex-col h-[500px] transition-colors">
+            <div className={`p-4 rounded-xl border ${theme.card} flex-grow flex flex-col h-[500px] transition-colors`}>
                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-300 flex items-center gap-2">
+                  <h3 className={`font-semibold text-sm ${theme.primary} flex items-center gap-2`}>
                     <Map size={16} /> Кластеры (vRDC)
                   </h3>
                </div>
                
                {/* Кнопки распределения */}
                <div className="flex gap-2 mb-3">
-                   <button onClick={handleAutoMax} className="flex-1 text-[11px] bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 px-2 py-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-700 transition font-medium flex justify-center items-center gap-1">
+                   <button onClick={handleAutoMax} className={`flex-1 text-[11px] bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 border ${theme.card} px-2 py-1.5 rounded hover:bg-slate-200 dark:hover:bg-zinc-700 transition font-medium flex justify-center items-center gap-1`}>
                       <Map size={12}/> Все регионы (Max)
                    </button>
-                   <button onClick={handleAutoLite} className="flex-1 text-[11px] bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900/40 px-2 py-1.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900/50 transition font-medium flex justify-center items-center gap-1">
+                   <button onClick={handleAutoLite} className={`flex-1 text-[11px] bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 px-2 py-1.5 rounded hover:bg-blue-100 dark:hover:bg-blue-900 transition font-medium flex justify-center items-center gap-1`}>
                       <Zap size={12}/> Популярные (Lite)
                    </button>
                </div>
 
                {/* Редактируемые итоги */}
-               <div className="bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg p-3 mb-3 flex gap-3">
+               <div className={`bg-slate-50 dark:bg-zinc-950 border ${t.inputBorder} rounded-lg p-3 mb-3 flex gap-3`}>
                    <div className="flex-1">
-                       <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-zinc-500 mb-1 block">Всего коробов</label>
+                       <label className={`text-[10px] uppercase font-bold ${t.subtitleText} mb-1 block`}>Всего коробов</label>
                        <input 
                            type="number" 
                            value={currentTotalBoxes} 
                            onChange={(e) => handleTotalBoxesChange(e.target.value)}
-                           className="w-full p-1.5 text-lg font-bold text-slate-800 dark:text-zinc-200 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded outline-none focus:ring-2 focus:ring-blue-500"
+                           className={`w-full p-1.5 text-lg font-bold ${t.inputText} ${t.inputBg} border rounded outline-none ${t.focusRing} ${t.inputBorder}`}
                        />
                    </div>
                    <div className="flex-1 text-right">
-                       <label className="text-[10px] uppercase font-bold text-slate-500 dark:text-zinc-500 mb-1 block">Товаров в партии</label>
+                       <div className="flex justify-end items-center mb-1 gap-2">
+                           <button 
+                               onClick={() => setAnchorMode('items')}
+                               className={`text-[9px] px-1.5 rounded transition-colors ${anchorMode === 'items' ? 'bg-blue-600 text-white' : `text-blue-400 hover:bg-blue-100 ${isDarkMode ? 'hover:bg-blue-900' : ''}`}`}
+                               title={anchorMode === 'items' ? 'Режим: Товары зафиксированы (Якорь)' : 'Включить режим фиксированных товаров'}
+                           >
+                               {anchorMode === 'items' ? <Lock size={10} /> : <Unlock size={10} />}
+                           </button>
+                           <label className={`text-[10px] uppercase font-bold ${t.subtitleText} block`}>Товаров в партии</label>
+                       </div>
                        <div className="relative">
                            <input 
                                type="number" 
                                value={displayTotalItems}
                                onChange={(e) => handleTotalItemsChange(e.target.value)} 
-                               className={`w-full p-1.5 text-lg font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded outline-none text-right focus:ring-2 focus:ring-blue-500 ${manualTotalItems !== null ? 'border-blue-300 ring-1 ring-blue-100 dark:ring-blue-900/50 dark:border-blue-800 bg-blue-50/20' : ''}`}
+                               className={`w-full p-1.5 text-lg font-bold text-blue-600 dark:text-blue-400 ${t.inputBg} border ${t.inputBorder} rounded outline-none text-right ${t.focusRing} ${manualTotalItems !== null ? 'border-blue-500/50 ring-1 ring-blue-500/20' : ''}`}
                            />
-                           {manualTotalItems !== null && <span className="absolute right-12 top-2.5 text-[10px] text-blue-300 pointer-events-none">фиксир.</span>}
                        </div>
                    </div>
                </div>
                
-               <div className="overflow-y-auto custom-scrollbar border border-slate-200 dark:border-zinc-800 rounded-lg flex-1">
+               <div className={`overflow-y-auto custom-scrollbar border ${theme.card} rounded-lg flex-1`}>
                    <table className="w-full text-xs text-left">
-                       <thead className="bg-slate-50 dark:bg-zinc-950 text-slate-500 dark:text-zinc-400 font-semibold border-b border-slate-200 dark:border-zinc-800 sticky top-0 z-10">
+                       <thead className={`text-slate-50 dark:text-zinc-400 font-semibold border-b ${theme.tableHeaderBg} sticky top-0 z-10`}>
                            <tr>
-                               <th className="px-3 py-2 bg-slate-50 dark:bg-zinc-950">Кластер</th>
-                               <th className="px-2 py-2 text-right bg-slate-50 dark:bg-zinc-950">vRDC</th>
-                               <th className="px-2 py-2 text-center bg-slate-50 dark:bg-zinc-950">Коробов</th>
+                               <th className={`px-3 py-2 ${theme.tableHeaderBg}`}>Кластер</th>
+                               <th className={`px-2 py-2 text-right ${theme.tableHeaderBg}`}>vRDC</th>
+                               <th className={`px-2 py-2 text-center ${theme.tableHeaderBg}`}>Коробов</th>
                            </tr>
                        </thead>
-                       <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+                       <tbody className={`divide-y ${isDarkMode ? 'divide-zinc-800' : 'divide-slate-100'}`}>
                            {clusters.map((c) => {
                                return (
                                <tr key={c.id} className={`group ${c.enabled || c.isBase ? 'bg-blue-50/20 dark:bg-blue-900/10' : 'bg-white dark:bg-zinc-900 hover:bg-slate-50 dark:hover:bg-zinc-800'}`}>
-                                   <td className="px-3 py-2">
+                                   <td className={`px-3 py-2 border-b ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                                        <div className="flex items-center gap-2">
                                            <button onClick={() => toggleCluster(c.id)} disabled={c.isBase} className={c.isBase ? 'text-blue-400 dark:text-blue-600 cursor-not-allowed' : c.enabled ? 'text-blue-600 dark:text-blue-400' : 'text-slate-300 dark:text-zinc-600'}>
                                                {c.enabled || c.isBase ? <CheckSquare size={16}/> : <Square size={16}/>}
@@ -427,7 +630,7 @@ const OzonCalculator = () => {
                                            </div>
                                        </div>
                                    </td>
-                                   <td className="px-2 py-2 text-right">
+                                   <td className={`px-2 py-2 text-right border-b ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                                        <input 
                                           type="number" 
                                           value={c.vrdcBoxRate}
@@ -436,7 +639,7 @@ const OzonCalculator = () => {
                                           className={`w-12 text-right bg-transparent border-b border-dashed border-slate-300 dark:border-zinc-700 outline-none text-slate-600 dark:text-zinc-400 ${!c.enabled && !c.isBase && 'text-slate-300 dark:text-zinc-600'}`}
                                        />
                                    </td>
-                                   <td className="px-2 py-2 text-center w-20">
+                                   <td className={`px-2 py-2 text-center w-20 border-b ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                                        <input 
                                           type="number" 
                                           min="0"
@@ -453,28 +656,28 @@ const OzonCalculator = () => {
             </div>
 
             {/* 4. ТАРИФЫ (Свернутые + Разделенные) */}
-            <div className="bg-white dark:bg-zinc-900 p-3 rounded-xl shadow-sm border border-slate-200 dark:border-zinc-800 transition-colors">
+            <div className={`p-3 rounded-xl border ${theme.card} transition-colors`}>
                 <details className="text-sm">
-                    <summary className="font-semibold text-slate-600 dark:text-zinc-400 cursor-pointer flex items-center gap-2">
+                    <summary className={`font-semibold ${theme.secondary} cursor-pointer flex items-center gap-2`}>
                         <DollarSign size={14} /> Настройки тарифов
                     </summary>
-                    <div className="mt-3 space-y-3 pl-2 border-l-2 border-slate-100 dark:border-zinc-800">
+                    <div className={`mt-3 space-y-3 pl-2 border-l-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                         {/* Фулфилмент */}
-                        <div className="text-[10px] uppercase font-bold text-slate-400 dark:text-zinc-500 mb-1">Фулфилмент (Мы)</div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-zinc-400 text-xs">Доставка до РФЦ (за короб)</span> <input className="w-16 border rounded text-right text-xs p-1 font-bold text-slate-700 dark:text-zinc-300 bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700" value={ffRates.deliveryToRfc} onChange={e => setFfRates({...ffRates, deliveryToRfc: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-zinc-400 text-xs">Обработка (шт)</span> <input className="w-14 border rounded text-right text-xs p-1 bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-300" value={ffRates.processing} onChange={e => setFfRates({...ffRates, processing: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-zinc-400 text-xs">Спецификация (шт)</span> <input className="w-14 border rounded text-right text-xs p-1 bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-300" value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-zinc-400 text-xs">Сборка (кор)</span> <input className="w-14 border rounded text-right text-xs p-1 bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-300" value={ffRates.boxAssembly} onChange={e => setFfRates({...ffRates, boxAssembly: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className="text-slate-600 dark:text-zinc-400 text-xs">Короб (материал)</span> <input className="w-14 border rounded text-right text-xs p-1 bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-700 dark:text-zinc-300" value={ffRates.boxMaterial} onChange={e => setFfRates({...ffRates, boxMaterial: +e.target.value})} /></div>
+                        <div className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'} mb-1`}>Фулфилмент (Мы)</div>
+                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Доставка до РФЦ (за короб)</span> <input className={`w-16 border rounded text-right text-xs p-1 font-bold ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.deliveryToRfc} onChange={e => setFfRates({...ffRates, deliveryToRfc: +e.target.value})} /></div>
+                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Обработка (шт)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.processing} onChange={e => setFfRates({...ffRates, processing: +e.target.value})} /></div>
+                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Спецификация (шт)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
+                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Сборка (кор)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxAssembly} onChange={e => setFfRates({...ffRates, boxAssembly: +e.target.value})} /></div>
+                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Короб (материал)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxMaterial} onChange={e => setFfRates({...ffRates, boxMaterial: +e.target.value})} /></div>
                         
                         {/* Разделитель */}
-                        <div className="my-2 border-t-2 border-dashed border-blue-100 dark:border-blue-900/30 relative">
-                             <span className="absolute -top-2.5 left-0 bg-white dark:bg-zinc-900 pr-2 text-[10px] font-bold text-blue-500 uppercase">Озон (Маркетплейс)</span>
+                        <div className={`my-2 border-t-2 border-dashed ${isDarkMode ? 'border-blue-900' : 'border-blue-100'} relative`}>
+                             <span className={`absolute -top-2.5 left-0 ${theme.bg} pr-2 text-[10px] font-bold text-blue-500 uppercase`}>Озон (Маркетплейс)</span>
                         </div>
                         
                         {/* Озон */}
                         <div className="pt-1">
-                             <div className="flex justify-between items-center"><span className="text-blue-800 dark:text-blue-300 text-xs">База логистики (до 5л)</span> <input className="w-16 border border-blue-200 dark:border-blue-900 rounded text-right text-xs p-1 text-blue-700 dark:text-blue-300 bg-white dark:bg-zinc-950" value={ozonTariffs.logisticsBase} onChange={e => setOzonTariffs({...ozonTariffs, logisticsBase: +e.target.value})} /></div>
+                             <div className="flex justify-between items-center"><span className={`text-blue-800 dark:text-blue-300 text-xs`}>База логистики (до 5л)</span> <input className={`w-16 border rounded text-right text-xs p-1 text-blue-700 dark:text-blue-300 ${t.inputBg} ${isDarkMode ? 'border-blue-900' : 'border-blue-200'}`} value={ozonTariffs.logisticsBase} onChange={e => setOzonTariffs({...ozonTariffs, logisticsBase: +e.target.value})} /></div>
                         </div>
                     </div>
                 </details>
@@ -488,37 +691,37 @@ const OzonCalculator = () => {
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 1. Profit Card */}
-                <div className={`relative overflow-hidden p-4 rounded-xl border ${profit >= 0 ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30' : 'bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-900/30'}`}>
+                <div className={`relative overflow-hidden p-4 rounded-xl border ${profit >= 0 ? theme.profitPositive : theme.profitNegative}`}>
                     <div className="relative z-10">
-                        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-1">Выгода за партию</div>
+                        <div className={`text-xs font-bold uppercase tracking-wider ${theme.secondary} mb-1`}>Выгода за партию</div>
                         <div className={`text-2xl font-bold ${profit >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-orange-700 dark:text-orange-400'}`}>
                             {profit > 0 ? '+' : ''}{Math.round(profit).toLocaleString()} ₽
                         </div>
-                        <div className="text-[10px] mt-1 opacity-80 text-slate-700 dark:text-zinc-300 leading-tight">
+                        <div className={`text-[10px] mt-1 opacity-80 ${theme.secondary} leading-tight`}>
                             Улучшение СВД на {Math.round(distribution.current.svd - distribution.target.svd)}ч убирает штраф {currentScenario.params.commission}%
                         </div>
                     </div>
                 </div>
 
                 {/* 2. vRDC Cost */}
-                <div className="p-4 rounded-xl border bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 transition-colors">
-                     <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-1">Затраты на vRDC</div>
+                <div className={`p-4 rounded-xl border ${theme.card} transition-colors`}>
+                     <div className={`text-xs font-bold uppercase tracking-wider ${theme.secondary} mb-1`}>Затраты на vRDC</div>
                      <div className="flex items-center gap-3">
                          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">{Math.round(distribution.target.vrdcCost).toLocaleString()} ₽</div>
                      </div>
-                     <div className="text-xs mt-1 text-slate-500 dark:text-zinc-400">
+                     <div className={`text-xs mt-1 ${theme.secondary}`}>
                         Оплата Озону за развоз
                      </div>
                 </div>
 
                 {/* 3. Ozon Logistics Total */}
-                <div className="p-4 rounded-xl border bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 transition-colors">
-                     <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-1">Итого (Партия)</div>
+                <div className={`p-4 rounded-xl border ${theme.card} transition-colors`}>
+                     <div className={`text-xs font-bold uppercase tracking-wider ${theme.secondary} mb-1`}>Итого (Партия)</div>
                      <div className="flex flex-col">
-                         <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                         <div className={`text-2xl font-bold ${theme.primary}`}>
                              {Math.round(totalCostTarget).toLocaleString()} ₽
                          </div>
-                         <div className="text-[10px] text-slate-400 dark:text-zinc-500 line-through">
+                         <div className={`text-[10px] ${theme.secondary} line-through`}>
                              {Math.round(totalCostCurrent).toLocaleString()} ₽
                          </div>
                      </div>
@@ -526,8 +729,8 @@ const OzonCalculator = () => {
             </div>
 
             {/* Analysis Chart */}
-            <div className="bg-white dark:bg-zinc-900 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-zinc-800 transition-colors">
-                 <h4 className="font-bold text-slate-700 dark:text-zinc-300 mb-4 text-sm">Структура затрат</h4>
+            <div className={`p-5 rounded-xl border ${theme.card} transition-colors`}>
+                 <h4 className={`font-bold ${theme.secondary} mb-4 text-sm`}>Структура затрат</h4>
                  <div className="h-56 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart
@@ -558,61 +761,61 @@ const OzonCalculator = () => {
             </div>
 
             {/* Detailed Table */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm border border-slate-200 dark:border-zinc-800 overflow-hidden text-sm transition-colors">
+            <div className={`rounded-xl border ${theme.card} overflow-hidden text-sm transition-colors`}>
                 <table className="w-full text-left">
-                    <thead className="bg-slate-50 dark:bg-zinc-950 text-xs uppercase text-slate-500 dark:text-zinc-400 font-semibold border-b border-slate-100 dark:border-zinc-800">
+                    <thead className={`text-xs uppercase ${theme.secondary} font-semibold border-b ${theme.tableHeaderBg}`}>
                         <tr>
                             <th className="px-5 py-3">Показатель</th>
                             <th className="px-5 py-3 text-right">Только Центр</th>
-                            <th className="px-5 py-3 text-right text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-900/20">
+                            <th className={`px-5 py-3 text-right ${theme.primary} ${theme.tableRowActive}`}>
                                 Распределение
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-zinc-800 text-slate-600 dark:text-zinc-300">
+                    <tbody className={`divide-y ${isDarkMode ? 'divide-zinc-800' : 'divide-slate-100'} ${theme.text}`}>
                         <tr>
-                            <td className="px-5 py-3 font-medium text-slate-700 dark:text-zinc-200">Среднее время доставки (СВД)</td>
+                            <td className="px-5 py-3 font-medium">Среднее время доставки (СВД)</td>
                             <td className="px-5 py-3 text-right font-bold text-red-600 dark:text-red-400">{Math.round(distribution.current.svd)} ч</td>
-                            <td className="px-5 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400 bg-blue-50/20 dark:bg-blue-900/10">{Math.round(distribution.target.svd)} ч</td>
+                            <td className={`px-5 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400 ${theme.tableRowActive}`}>{Math.round(distribution.target.svd)} ч</td>
                         </tr>
                         <tr>
                             <td className="px-5 py-3">
                                 <div>Фулфилмент + Логистика до РФЦ</div>
-                                <div className="text-xs text-slate-400 dark:text-zinc-500">Услуги, материалы, доставка коробов</div>
+                                <div className={`text-xs ${theme.secondary}`}>Услуги, материалы, доставка коробов</div>
                             </td>
                             <td className="px-5 py-3 text-right">{Math.round(ffServicesCost + ourDeliveryCost).toLocaleString()} ₽</td>
-                            <td className="px-5 py-3 text-right bg-blue-50/20 dark:bg-blue-900/10">{Math.round(ffServicesCost + ourDeliveryCost).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right ${theme.tableRowActive}`}>{Math.round(ffServicesCost + ourDeliveryCost).toLocaleString()} ₽</td>
                         </tr>
                         <tr>
                             <td className="px-5 py-3">
                                 <div>Логистика Озон (База × Коэфф)</div>
-                                <div className="text-xs text-slate-400 dark:text-zinc-500">Коэфф: {currentScenario.params.coeff} vs {targetScenario.params.coeff}</div>
+                                <div className={`text-xs ${theme.secondary}`}>Коэфф: {currentScenario.params.coeff} vs {targetScenario.params.coeff}</div>
                             </td>
                             <td className="px-5 py-3 text-right">{Math.round(currentScenario.logistics).toLocaleString()} ₽</td>
-                            <td className="px-5 py-3 text-right bg-blue-50/20 dark:bg-blue-900/10">{Math.round(targetScenario.logistics).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right ${theme.tableRowActive}`}>{Math.round(targetScenario.logistics).toLocaleString()} ₽</td>
                         </tr>
                         <tr>
                             <td className="px-5 py-3">
                                 <div className="flex items-center gap-1">Штрафная комиссия <AlertTriangle size={12} className="text-red-500 dark:text-red-400"/></div>
-                                <div className="text-xs text-slate-400 dark:text-zinc-500">{currentScenario.params.commission}% от цены товара</div>
+                                <div className={`text-xs ${theme.secondary}`}>{currentScenario.params.commission}% от цены товара</div>
                             </td>
                             <td className="px-5 py-3 text-right text-red-600 dark:text-red-400 font-bold">{Math.round(currentScenario.commission).toLocaleString()} ₽</td>
-                            <td className="px-5 py-3 text-right text-red-600 dark:text-red-400 font-bold bg-blue-50/20 dark:bg-blue-900/10">{Math.round(targetScenario.commission).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right text-red-600 dark:text-red-400 font-bold ${theme.tableRowActive}`}>{Math.round(targetScenario.commission).toLocaleString()} ₽</td>
                         </tr>
                         <tr>
                             <td className="px-5 py-3">vRDC (Кросс-докинг)</td>
-                            <td className="px-5 py-3 text-right text-slate-300 dark:text-zinc-600">-</td>
-                            <td className="px-5 py-3 text-right font-medium text-orange-600 dark:text-orange-400 bg-blue-50/20 dark:bg-blue-900/10">{Math.round(distribution.target.vrdcCost).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right ${theme.secondary}`}>-</td>
+                            <td className={`px-5 py-3 text-right font-medium text-orange-600 dark:text-orange-400 ${theme.tableRowActive}`}>{Math.round(distribution.target.vrdcCost).toLocaleString()} ₽</td>
                         </tr>
-                        <tr className="bg-slate-50 dark:bg-zinc-800 font-bold text-slate-900 dark:text-zinc-100 border-t-2 border-slate-100 dark:border-zinc-700">
+                        <tr className={`${isDarkMode ? 'bg-zinc-800 text-zinc-100' : 'bg-slate-50 text-slate-900'} font-bold border-t-2 ${isDarkMode ? 'border-zinc-700' : 'border-slate-100'}`}>
                             <td className="px-5 py-3">ИТОГО ПАРТИЯ</td>
                             <td className="px-5 py-3 text-right">{Math.round(totalCostCurrent).toLocaleString()} ₽</td>
-                            <td className="px-5 py-3 text-right bg-blue-50 dark:bg-blue-900/20">{Math.round(totalCostTarget).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right ${isDarkMode ? 'bg-blue-900/20' : 'bg-blue-50'}`}>{Math.round(totalCostTarget).toLocaleString()} ₽</td>
                         </tr>
-                        <tr className="bg-blue-50/10 dark:bg-blue-900/5 font-bold text-blue-900 dark:text-blue-300 border-t border-slate-100 dark:border-zinc-800">
+                        <tr className={`${isDarkMode ? 'bg-blue-900/5 text-blue-300' : 'bg-blue-50/10 text-blue-900'} font-bold border-t ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
                             <td className="px-5 py-3 text-xs uppercase tracking-wider">Затраты на 1 шт.</td>
                             <td className="px-5 py-3 text-right">{Math.round(unitCostCurrent).toLocaleString()} ₽</td>
-                            <td className="px-5 py-3 text-right bg-blue-100/50 dark:bg-blue-900/20">{Math.round(unitCostTarget).toLocaleString()} ₽</td>
+                            <td className={`px-5 py-3 text-right ${isDarkMode ? 'bg-blue-900/20' : 'bg-blue-100/50'}`}>{Math.round(unitCostTarget).toLocaleString()} ₽</td>
                         </tr>
                     </tbody>
                 </table>
