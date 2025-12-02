@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import ReactQuill from 'react-quill-new';
-import 'react-quill-new/dist/quill.snow.css'; // Стили для красоты редактора
+import 'react-quill-new/dist/quill.snow.css'; // Стили
 import { Link } from 'react-router-dom';
-import { Save, Trash2, ArrowLeft, Plus, FileText, AlertCircle } from 'lucide-react';
+import { Save, Trash2, ArrowLeft, Plus, FileText, AlertCircle, Download } from 'lucide-react';
 
 const AdminPanel = ({ data, onSave }) => {
   const [selectedArticleId, setSelectedArticleId] = useState(null);
@@ -11,19 +11,21 @@ const AdminPanel = ({ data, onSave }) => {
   const [editContent, setEditContent] = useState('');
   const [editCatId, setEditCatId] = useState(data?.categories?.[0]?.id || 1);
 
-  // Настройка кнопок редактора (Тулбар)
+  // Настройка кнопок редактора
   const modules = {
     toolbar: [
-      [{ 'header': [1, 2, 3, false] }], // Заголовки
-      ['bold', 'italic', 'underline', 'strike'], // Жирный, курсив...
-      [{ 'list': 'ordered'}, { 'list': 'bullet' }], // Списки
-      ['link', 'image'], // Ссылка и Картинка
-      ['clean'] // Очистить формат
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link', 'image'],
+      ['clean']
     ],
   };
 
   // --- ЗАЩИТА ---
   const categories = data?.categories || [];
+  
+  // Если данных нет совсем
   if (categories.length === 0) {
     return (
       <div className="min-h-screen bg-slate-100 p-8 flex items-center justify-center">
@@ -36,10 +38,33 @@ const AdminPanel = ({ data, onSave }) => {
     );
   }
 
+  // --- ФУНКЦИЯ СКАЧИВАНИЯ JSON ---
+  const handleDownloadJson = () => {
+      // 1. Превращаем данные в красивую строку
+      const jsonString = JSON.stringify(data, null, 2);
+      
+      // 2. Создаем файл в памяти браузера
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      
+      // 3. Создаем невидимую ссылку и нажимаем на неё
+      const link = document.createElement('a');
+      link.href = href;
+      link.download = "knowledgeBase.json"; // Имя файла
+      document.body.appendChild(link);
+      link.click();
+      
+      // 4. Убираем мусор
+      document.body.removeChild(link);
+      URL.revokeObjectURL(href);
+      
+      alert("Файл скачан! Теперь загрузите его на GitHub в папку src/data/");
+  };
+
   const handleSelectArticle = (article, catId) => {
     setSelectedArticleId(article.id);
     setEditTitle(article.title || '');
-    setEditContent(article.content || ''); // Загружаем HTML статьи в редактор
+    setEditContent(article.content || '');
     setEditCatId(catId);
   };
 
@@ -72,7 +97,7 @@ const AdminPanel = ({ data, onSave }) => {
     });
 
     onSave({ ...data, categories: newCategories });
-    alert("Сохранено!");
+    alert("Сохранено в браузере! Не забудьте скачать JSON для обновления сайта.");
     if (!selectedArticleId) handleNewArticle();
   };
 
@@ -88,7 +113,7 @@ const AdminPanel = ({ data, onSave }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col">
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800">
       <div className="bg-white border-b px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <span className="bg-indigo-100 text-indigo-600 p-1 rounded">Admin</span> Панель
@@ -98,9 +123,12 @@ const AdminPanel = ({ data, onSave }) => {
 
       <div className="flex flex-1 overflow-hidden">
         {/* SIDEBAR */}
-        <div className="w-80 bg-white border-r overflow-y-auto p-4 hidden md:block">
-            <button onClick={handleNewArticle} className="w-full bg-indigo-600 text-white py-2 rounded mb-6 flex items-center justify-center gap-2 hover:bg-indigo-700 font-medium"><Plus size={18}/> Новая статья</button>
-            <div className="space-y-6">
+        <div className="w-80 bg-white border-r overflow-y-auto p-4 hidden md:flex flex-col">
+            <button onClick={handleNewArticle} className="w-full bg-indigo-600 text-white py-2 rounded mb-6 flex items-center justify-center gap-2 hover:bg-indigo-700 font-medium transition">
+                <Plus size={18}/> Новая статья
+            </button>
+
+            <div className="flex-1 overflow-y-auto space-y-6 mb-4">
                 {categories.map(cat => (
                     <div key={cat.id}>
                         <h3 className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-wider">{cat.title}</h3>
@@ -114,6 +142,20 @@ const AdminPanel = ({ data, onSave }) => {
                     </div>
                 ))}
             </div>
+
+            {/* КНОПКА СКАЧИВАНИЯ (Внизу сайдбара) */}
+            <div className="pt-4 border-t border-slate-100">
+                <button 
+                    onClick={handleDownloadJson}
+                    className="w-full border-2 border-dashed border-slate-300 text-slate-500 py-2 rounded hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center gap-2 transition font-medium text-sm"
+                    title="Скачать файл для загрузки на GitHub"
+                >
+                    <Download size={16}/> Скачать JSON
+                </button>
+                <p className="text-[10px] text-slate-400 text-center mt-2">
+                    Чтобы обновить сайт для всех, загрузите этот файл в src/data на GitHub.
+                </p>
+            </div>
         </div>
 
         {/* EDITOR AREA */}
@@ -121,7 +163,7 @@ const AdminPanel = ({ data, onSave }) => {
             <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-lg font-bold text-slate-700">{selectedArticleId ? 'Редактирование' : 'Новая статья'}</h2>
-                    {selectedArticleId && <button onClick={handleDelete} className="text-red-500 hover:bg-red-50 p-2 rounded"><Trash2 size={20}/></button>}
+                    {selectedArticleId && <button onClick={handleDelete} className="text-red-500 hover:bg-red-50 p-2 rounded transition"><Trash2 size={20}/></button>}
                 </div>
                 <div className="space-y-4">
                     {!selectedArticleId && (
@@ -133,7 +175,6 @@ const AdminPanel = ({ data, onSave }) => {
                     )}
                     <input className="w-full text-2xl font-bold border-0 border-b border-slate-200 px-0 py-2 outline-none" placeholder="Заголовок..." value={editTitle} onChange={e => setEditTitle(e.target.value)} />
                     
-                    {/* ВОТ ОН - ВАШ НОВЫЙ РЕДАКТОР */}
                     <div className="h-[400px] mb-12">
                         <ReactQuill 
                             theme="snow"
@@ -145,7 +186,7 @@ const AdminPanel = ({ data, onSave }) => {
                     </div>
                     
                     <div className="pt-4 border-t flex justify-end">
-                        <button onClick={handleSave} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2"><Save size={18}/> Сохранить</button>
+                        <button onClick={handleSave} className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-green-700 transition"><Save size={18}/> Сохранить</button>
                     </div>
                 </div>
             </div>

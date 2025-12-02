@@ -1,35 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Menu, ChevronRight, ChevronDown, ThumbsUp, ThumbsDown, Calculator, Home, Folder, Sun, Moon, List, XCircle, Package } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 // Вспомогательный компонент для подсветки текста
 const HighlightText = React.memo(({ text = '', highlight = '' }) => {
     if (!highlight.trim()) return <span>{text}</span>;
-    
     const safeHighlight = highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`(${safeHighlight})`, 'gi');
     const parts = text.split(regex);
-    
     return (
         <span>
             {parts.map((part, i) => 
                 regex.test(part) ? (
-                    <span key={i} className="bg-yellow-200 dark:bg-yellow-900/50 text-black dark:text-yellow-200 font-bold rounded-[2px] px-0.5">
-                        {part}
-                    </span>
-                ) : (
-                    <span key={i}>{part}</span>
-                )
+                    <span key={i} className="bg-yellow-200 dark:bg-yellow-900/50 text-black dark:text-yellow-200 font-bold rounded-[2px] px-0.5">{part}</span>
+                ) : <span key={i}>{part}</span>
             )}
         </span>
     );
 });
 
 const HelpCenter = ({ data }) => {
-  // Состояния
   const [inputValue, setInputValue] = useState('');
   const [debouncedTerm, setDebouncedTerm] = useState('');
-  
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState([]);
@@ -38,6 +30,9 @@ const HelpCenter = ({ data }) => {
   const [processedContent, setProcessedContent] = useState(''); 
   const [showNoResultsToast, setShowNoResultsToast] = useState(false);
   
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [isDarkMode, setIsDarkMode] = useState(() => {
       const saved = localStorage.getItem('theme');
       return saved === 'dark'; 
@@ -45,15 +40,45 @@ const HelpCenter = ({ data }) => {
 
   const categories = useMemo(() => data?.categories || [], [data]);
 
-  // --- ОПТИМИЗАЦИЯ: DEBOUNCE (300ms) ---
+  // --- СИНХРОНИЗАЦИЯ С URL ---
   useEffect(() => {
-      const timerId = setTimeout(() => {
-          setDebouncedTerm(inputValue);
-      }, 300);
+      // Убираем # и возможный префикс internal-, если вдруг пользователь зашел по прямой "грязной" ссылке
+      const hash = location.hash.replace('#', '').replace('internal-', '');
+      
+      if (hash && categories.length > 0) {
+          let found = null;
+          let foundCatId = null;
+          for (const cat of categories) {
+              const art = (cat.articles || []).find(a => String(a.id) === hash);
+              if (art) { found = art; foundCatId = cat.id; break; }
+          }
+          if (found) {
+              setSelectedArticle(found);
+              if (foundCatId) setExpandedCategories(prev => prev.includes(foundCatId) ? prev : [...prev, foundCatId]);
+          }
+      } else if (!hash && categories.length > 0 && !selectedArticle) {
+          const firstCat = categories[0];
+          if (firstCat.articles && firstCat.articles.length > 0) {
+             openArticle(firstCat.articles[0], firstCat.id, false);
+          }
+      }
+  }, [location.hash, categories]);
+
+  const openArticle = (article, catId = null, pushHistory = true) => {
+      setSelectedArticle(article);
+      setMobileMenuOpen(false);
+      window.scrollTo({top: 0, behavior: 'smooth'});
+      if (catId) setExpandedCategories(prev => prev.includes(catId) ? prev : [...prev, catId]);
+      if (article && article.id) {
+          pushHistory ? navigate(`#${article.id}`) : navigate(`#${article.id}`, { replace: true });
+      }
+  };
+
+  useEffect(() => {
+      const timerId = setTimeout(() => setDebouncedTerm(inputValue), 300);
       return () => clearTimeout(timerId);
   }, [inputValue]);
 
-  // Применение темы
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -64,46 +89,21 @@ const HelpCenter = ({ data }) => {
     }
   }, [isDarkMode]);
 
-  // Авто-открытие первой статьи
-  useEffect(() => {
-    if (!selectedArticle && categories.length > 0) {
-      const firstCat = categories[0];
-      if (firstCat.articles && firstCat.articles.length > 0) {
-         const firstArt = firstCat.articles[0];
-         setSelectedArticle(firstArt);
-         setExpandedCategories([firstCat.id]);
-      }
-    }
-  }, [categories]); 
-
-  // --- ГЕНЕРАЦИЯ СОДЕРЖАНИЯ (TOC) И ОЧИСТКА ---
+  // Очистка HTML, генерация TOC и ИСПРАВЛЕНИЕ ССЫЛОК
   useEffect(() => {
     if (!selectedArticle) return;
-
-    // 1. Парсинг HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(selectedArticle.content, 'text/html');
     const body = doc.body;
 
-    // --- БЛОК ОЧИСТКИ (Удаляем старое меню из статьи) ---
-    
-    // 1. Удаляем все теги <details> (обычно в них скрывают меню)
-    const details = body.querySelectorAll('details');
-    details.forEach(el => el.remove());
-
-    // 2. Ищем блоки div, которые содержат слова "На странице" или "Содержание"
-    const divs = body.querySelectorAll('div');
-    divs.forEach(div => {
-        const text = div.textContent.toLowerCase();
-        // Если блок содержит ключевые слова И список внутри - удаляем
-        if ((text.includes('на странице') || text.includes('содержание')) && (div.querySelector('ul') || div.querySelector('ol'))) {
+    // 1. Удаляем мусорные блоки навигации
+    body.querySelectorAll('details').forEach(el => el.remove());
+    body.querySelectorAll('div').forEach(div => {
+        if ((div.textContent.toLowerCase().includes('на странице') || div.textContent.toLowerCase().includes('содержание')) && (div.querySelector('ul') || div.querySelector('ol'))) {
             div.remove();
         }
     });
-
-    // 3. Ищем списки <ul>, которые содержат только якорные ссылки (#link)
-    const lists = body.querySelectorAll('ul');
-    lists.forEach(ul => {
+    body.querySelectorAll('ul').forEach(ul => {
         const links = ul.querySelectorAll('a');
         if (links.length > 0) {
             let isAnchorList = true;
@@ -111,53 +111,69 @@ const HelpCenter = ({ data }) => {
                 const href = link.getAttribute('href');
                 if (!href || !href.startsWith('#')) isAnchorList = false;
             });
-
             if (isAnchorList) {
                 ul.remove();
                 const prev = ul.previousElementSibling;
                 if (prev && (prev.tagName === 'H2' || prev.tagName === 'H3' || prev.tagName === 'P')) {
-                    const prevText = prev.textContent.toLowerCase();
-                    if (prevText.includes('содержание') || prevText.includes('на странице')) {
-                        prev.remove();
-                    }
+                    if (prev.textContent.toLowerCase().includes('содержание') || prev.textContent.toLowerCase().includes('на странице')) prev.remove();
                 }
             }
         }
     });
 
-    // --- КОНЕЦ ОЧИСТКИ ---
+    // 2. ИСПРАВЛЕНИЕ ССЫЛОК (НОВОЕ!)
+    // Находим все ссылки, которые ведут на #internal-
+    const internalLinks = body.querySelectorAll('a[href^="#internal-"]');
+    internalLinks.forEach(link => {
+        // Убираем target="_blank", чтобы они открывались в этом же окне
+        link.removeAttribute('target');
+        // Добавляем класс для стилизации (опционально)
+        link.classList.add('internal-link');
+    });
     
-    // 4. Генерация нового красивого TOC для правой колонки
+    // 3. Генерация оглавления
     const headers = body.querySelectorAll('h2, h3');
     const newToc = [];
-
     headers.forEach((header, index) => {
         const id = header.id || `section-${index}`;
         header.id = id;
         newToc.push({ id, text: header.textContent, level: header.tagName.toLowerCase() });
     });
-
     setToc(newToc);
-    setProcessedContent(body.innerHTML); // Сохраняем уже ОЧИЩЕННЫЙ HTML
+    setProcessedContent(body.innerHTML);
   }, [selectedArticle]);
 
+  const handleContentClick = (e) => {
+    const link = e.target.closest('a');
+    if (!link) return;
+    
+    // Получаем href из атрибута (он может быть как полным URL, так и относительным)
+    const href = link.getAttribute('href');
+    
+    if (href && href.startsWith('#internal-')) {
+      e.preventDefault(); // Останавливаем стандартный переход
+      e.stopPropagation(); // Останавливаем всплытие
+      
+      const targetId = href.replace('#internal-', '');
+      // Меняем URL (без перезагрузки) -> сработает useEffect выше
+      navigate(`#${targetId}`);
+    } 
+    else if (href && !href.startsWith('#')) {
+        if (link.target !== '_blank') { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+    }
+  };
 
-  // --- ФИЛЬТРАЦИЯ И СОРТИРОВКА ---
   const displayCategories = useMemo(() => {
       if (!debouncedTerm) return categories;
-
       const lowerTerm = debouncedTerm.toLowerCase();
       let hasMatches = false;
-
       const mappedCats = categories.map(cat => {
           const safeArticles = cat.articles || [];
-          
           const matchingArticles = safeArticles.filter(art => {
               const inTitle = (art.title || '').toLowerCase().includes(lowerTerm);
               const inContent = (art.content || '').toLowerCase().includes(lowerTerm);
               return inTitle || inContent;
           });
-
           matchingArticles.sort((a, b) => {
               const aTitle = (a.title || '').toLowerCase().includes(lowerTerm);
               const bTitle = (b.title || '').toLowerCase().includes(lowerTerm);
@@ -165,27 +181,16 @@ const HelpCenter = ({ data }) => {
               if (!aTitle && bTitle) return 1;
               return 0;
           });
-
           if (matchingArticles.length > 0) hasMatches = true;
-
           return { ...cat, articles: matchingArticles };
       }).filter(cat => cat.articles.length > 0);
-
       if (!hasMatches) return categories;
-
       return mappedCats;
   }, [categories, debouncedTerm]);
 
-  
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') {
-        const hasRealMatches = categories.some(cat => 
-            (cat.articles || []).some(art => 
-                (art.title || '').toLowerCase().includes(inputValue.toLowerCase()) || 
-                (art.content || '').toLowerCase().includes(inputValue.toLowerCase())
-            )
-        );
-
+        const hasRealMatches = categories.some(cat => (cat.articles || []).some(art => (art.title || '').toLowerCase().includes(inputValue.toLowerCase()) || (art.content || '').toLowerCase().includes(inputValue.toLowerCase())));
         if (!hasRealMatches && inputValue) {
             setShowNoResultsToast(true);
             setTimeout(() => setShowNoResultsToast(false), 3000);
@@ -199,15 +204,12 @@ const HelpCenter = ({ data }) => {
 
   const scrollToSection = (id) => {
       const element = document.getElementById(id);
-      if (element) {
-          window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
-      }
+      if (element) window.scrollTo({ top: element.getBoundingClientRect().top + window.scrollY - 100, behavior: 'smooth' });
   };
 
   return (
     <div className={`min-h-screen font-sans flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-neutral-300' : 'bg-white text-slate-900'}`}>
       
-      {/* TOAST УВЕДОМЛЕНИЕ */}
       {showNoResultsToast && (
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-2 fade-in">
               <div className="bg-neutral-800 text-white px-4 py-2 rounded-lg shadow-xl flex items-center gap-2 border border-neutral-700">
@@ -217,144 +219,64 @@ const HelpCenter = ({ data }) => {
           </div>
       )}
 
-      {/* --- МОБИЛЬНАЯ ШАПКА --- */}
+      {/* MOBILE HEADER */}
       <div className="md:hidden border-b p-4 flex justify-between items-center sticky top-0 z-50 bg-white dark:bg-black border-slate-200 dark:border-neutral-800">
-         {/* ЛОГОТИП (Мобильный) */}
          <div className="flex items-center">
-            {/* Светлое лого */}
             <img src="/logo-light.svg" alt="FF Help Center" className="h-8 w-auto block dark:hidden object-contain" />
-            {/* Темное лого */}
             <img src="/logo-dark.svg" alt="FF Help Center" className="h-8 w-auto hidden dark:block object-contain" />
          </div>
-         
          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 bg-slate-100 dark:bg-neutral-900 rounded text-slate-600 dark:text-neutral-400">
             <Menu size={20}/>
          </button>
       </div>
 
-      {/* --- ЛЕВАЯ КОЛОНКА (САЙДБАР) --- */}
-      <aside className={`
-          fixed inset-0 z-40 w-full md:w-80 md:static md:block
-          border-r transition-transform duration-300 ease-in-out
-          ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          bg-[#F9FAFB] dark:bg-black border-slate-200 dark:border-white/10
-      `}>
+      {/* SIDEBAR */}
+      <aside className={`fixed inset-0 z-40 w-full md:w-80 md:static md:block border-r transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} bg-[#F9FAFB] dark:bg-black border-slate-200 dark:border-white/10`}>
          <div className="h-full overflow-y-auto custom-scrollbar flex flex-col">
-            
-            {/* ШАПКА САЙДБАРА */}
             <div className="p-5 sticky top-0 z-10 bg-[#F9FAFB] dark:bg-black transition-colors duration-300">
                 <div className="flex items-center justify-between mb-6">
-                    {/* --- ЛОГОТИП (Десктоп) --- */}
                     <div className="flex items-center">
-                        {/* Светлое лого (показывается только в светлой теме) */}
                         <img src="/logo-light.svg" alt="FF Help Center" className="h-10 w-auto block dark:hidden object-contain" />
-                        {/* Темное лого (показывается только в темной теме) */}
                         <img src="/logo-dark.svg" alt="FF Help Center" className="h-10 w-auto hidden dark:block object-contain" />
                     </div>
-                    
-                    {/* Переключатель темы */}
-                    <button 
-                        onClick={() => setIsDarkMode(!isDarkMode)}
-                        className="p-2 rounded-lg border transition-colors
-                                   bg-white dark:bg-neutral-900 
-                                   border-slate-200 dark:border-neutral-800 
-                                   text-slate-500 dark:text-neutral-400 
-                                   hover:text-indigo-600 dark:hover:text-white"
-                        title="Сменить тему"
-                    >
+                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-lg border transition-colors bg-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-800 text-slate-500 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white">
                         {isDarkMode ? <Sun size={18}/> : <Moon size={18}/>}
                     </button>
                 </div>
-                
                 <div className="relative group">
                     <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-neutral-500 transition-colors group-focus-within:text-indigo-500" size={16} />
-                    <input 
-                        type="text" 
-                        placeholder="Поиск..." 
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onKeyDown={handleSearchKeyDown}
-                        className="w-full rounded-lg pl-9 pr-3 py-2 text-sm transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500
-                                   bg-white dark:bg-neutral-900 
-                                   border border-slate-200 dark:border-neutral-800
-                                   text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-neutral-600"
-                    />
+                    <input type="text" placeholder="Поиск..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleSearchKeyDown} className="w-full rounded-lg pl-9 pr-3 py-2 text-sm transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-neutral-600" />
                 </div>
             </div>
 
-            {/* МЕНЮ */}
             <div className="px-3 pb-10 flex-1 space-y-6">
-                
-                {/* ИНСТРУМЕНТЫ (ССЫЛКИ) */}
                 <div className="space-y-1 pb-4 border-b border-slate-200 dark:border-white/10 mx-2">
-                     <div className="px-3 py-2 text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">
-                        Инструменты
-                     </div>
-                     <Link to="/calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900">
-                        <Calculator size={16}/> Калькулятор выгоды Wildberries FBO
-                     </Link>
-                     <Link to="/ozon-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-neutral-900">
-                        <Calculator size={16}/>
-                        Калькулятор выгоды Ozon FBO
-                     </Link>
-                     <Link to="/packaging-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-white dark:hover:bg-neutral-900">
-                        <Package size={16}/> Расчет упаковки
-                     </Link>
-                     <Link to="/admin" className="mt-2 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-400 dark:text-neutral-500 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900">
-                        <Home size={16}/> Админ-панель
-                     </Link>
+                     <div className="px-3 py-2 text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Инструменты</div>
+                     <Link to="/calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900"><Calculator size={16}/> Калькулятор выгоды Wildberries FBO</Link>
+                     <Link to="/ozon-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-neutral-900"><div className="w-4 h-4 bg-blue-600 text-white rounded-[2px] text-[8px] flex items-center justify-center font-bold">Oz</div>Калькулятор выгоды Ozon FBO</Link>
+                     <Link to="/packaging-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-white dark:hover:bg-neutral-900"><Package size={16}/> Расчет упаковки</Link>
+                     <Link to="/admin" className="mt-2 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-400 dark:text-neutral-500 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900"><Home size={16}/> Админ-панель</Link>
                 </div>
 
-                {/* ПАПКИ И СТАТЬИ */}
                 <div className="space-y-1">
                     {displayCategories.map(cat => {
                         const isSearchMode = debouncedTerm.length > 0;
                         const isOpen = expandedCategories.includes(cat.id) || isSearchMode;
                         const hasActiveArticle = cat.articles.some(a => a.id === selectedArticle?.id);
-
                         return (
                             <div key={cat.id} className="mb-1">
-                                <button 
-                                    onClick={() => toggleCategory(cat.id)}
-                                    className={`w-full flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-md transition-colors 
-                                        ${hasActiveArticle 
-                                            ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' 
-                                            : 'text-slate-500 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-900 hover:text-slate-800 dark:hover:text-neutral-200'}
-                                    `}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <Folder size={16} className={hasActiveArticle ? 'fill-indigo-200 dark:fill-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-neutral-600'} />
-                                        <span>{cat.title}</span>
-                                    </div>
+                                <button onClick={() => toggleCategory(cat.id)} className={`w-full flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-md transition-colors ${hasActiveArticle ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-900 hover:text-slate-800 dark:hover:text-neutral-200'}`}>
+                                    <div className="flex items-center gap-2"><Folder size={16} className={hasActiveArticle ? 'fill-indigo-200 dark:fill-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-neutral-600'} /><span>{cat.title}</span></div>
                                     {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                 </button>
-
                                 {isOpen && (
                                     <div className="mt-1 ml-2 pl-2 border-l border-slate-200 dark:border-neutral-800 space-y-0.5">
                                         {(cat.articles || []).map(art => {
                                             const isActive = selectedArticle?.id === art.id;
                                             return (
-                                                <button
-                                                    key={art.id}
-                                                    onClick={() => {
-                                                        setSelectedArticle(art);
-                                                        setMobileMenuOpen(false);
-                                                        window.scrollTo({top: 0, behavior: 'auto'});
-                                                    }}
-                                                    className={`w-full text-left px-3 py-1.5 text-[13px] rounded-md transition-all flex items-center gap-2
-                                                        ${isActive 
-                                                            ? 'bg-white dark:bg-neutral-800 text-indigo-600 dark:text-white font-medium shadow-sm border border-slate-100 dark:border-neutral-700' 
-                                                            : 'text-slate-500 dark:text-neutral-500 hover:text-slate-900 dark:hover:text-neutral-300 hover:bg-slate-100/50 dark:hover:bg-neutral-900'
-                                                        }`}
-                                                >
-                                                    {isActive ? (
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 flex-shrink-0"></span>
-                                                    ) : (
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0"></span>
-                                                    )}
-                                                    <span className="truncate">
-                                                        <HighlightText text={art.title} highlight={debouncedTerm} />
-                                                    </span>
+                                                <button key={art.id} onClick={() => openArticle(art, cat.id)} className={`w-full text-left px-3 py-1.5 text-[13px] rounded-md transition-all flex items-center gap-2 ${isActive ? 'bg-white dark:bg-neutral-800 text-indigo-600 dark:text-white font-medium shadow-sm border border-slate-100 dark:border-neutral-700' : 'text-slate-500 dark:text-neutral-500 hover:text-slate-900 dark:hover:text-neutral-300 hover:bg-slate-100/50 dark:hover:bg-neutral-900'}`}>
+                                                    {isActive ? <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 flex-shrink-0"></span> : <span className="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0"></span>}
+                                                    <span className="truncate"><HighlightText text={art.title} highlight={debouncedTerm} /></span>
                                                 </button>
                                             );
                                         })}
@@ -368,27 +290,20 @@ const HelpCenter = ({ data }) => {
          </div>
       </aside>
 
-      {/* --- ЦЕНТРАЛЬНАЯ ЧАСТЬ (КОНТЕНТ) --- */}
+      {/* CONTENT */}
       <main className="flex-1 min-h-screen w-full transition-colors duration-300 bg-white dark:bg-[#0a0a0a]">
         <div className="max-w-[1200px] mx-auto flex items-start">
-            
-            {/* СТАТЬЯ */}
             <div className="flex-1 px-6 py-10 md:px-12 md:py-12 min-w-0"> 
                 {selectedArticle ? (
                     <div className="animate-in fade-in duration-300">
                         <nav className="flex items-center gap-2 text-xs font-medium text-slate-400 dark:text-neutral-500 mb-8 uppercase tracking-wide">
-                            <span>Help Center</span>
-                            <ChevronRight size={12} />
+                            <span>Help Center</span><ChevronRight size={12} />
                             {(() => {
                                 const cat = categories.find(c => c.articles.some(a => a.id === selectedArticle.id));
                                 return cat ? <span className="text-slate-600 dark:text-neutral-400">{cat.title}</span> : null;
                             })()}
                         </nav>
-
-                        <h1 className="text-3xl md:text-4xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
-                            {selectedArticle.title}
-                        </h1>
-
+                        <h1 className="text-3xl md:text-4xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">{selectedArticle.title}</h1>
                         <style>{`
                             .doc-content { font-size: 16px; line-height: 1.7; color: #334155; }
                             .dark .doc-content { color: #d4d4d4; }
@@ -414,61 +329,33 @@ const HelpCenter = ({ data }) => {
                             .doc-content pre { background: #1e293b; color: #f8fafc; padding: 1em; rounded: 8px; overflow-x: auto; margin: 1.5em 0; }
                             .dark .doc-content pre { background: #171717; border: 1px solid #262626; }
                         `}</style>
-                        
-                        <div 
-                            className="doc-content"
-                            dangerouslySetInnerHTML={{ __html: processedContent || selectedArticle.content }}
-                        />
-
+                        <div className="doc-content" dangerouslySetInnerHTML={{ __html: processedContent || selectedArticle.content }} onClick={handleContentClick} />
                         <div className="mt-20 pt-10 border-t border-slate-100 dark:border-neutral-800">
                             <div className="flex items-center justify-between">
                                 <h4 className="font-bold text-slate-700 dark:text-neutral-400 text-sm">Было полезно?</h4>
                                 <div className="flex gap-2">
-                                    <button className="p-2 border rounded-lg transition border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:border-slate-300 dark:hover:border-neutral-600 text-slate-500 dark:text-neutral-500 hover:text-green-600">
-                                        <ThumbsUp size={18}/>
-                                    </button>
-                                    <button className="p-2 border rounded-lg transition border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:border-slate-300 dark:hover:border-neutral-600 text-slate-500 dark:text-neutral-500 hover:text-red-600">
-                                        <ThumbsDown size={18}/>
-                                    </button>
+                                    <button className="p-2 border rounded-lg transition border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:border-slate-300 dark:hover:border-neutral-600 text-slate-500 dark:text-neutral-500 hover:text-green-600"><ThumbsUp size={18}/></button>
+                                    <button className="p-2 border rounded-lg transition border-slate-200 dark:border-neutral-800 hover:bg-slate-50 dark:hover:bg-neutral-800 hover:border-slate-300 dark:hover:border-neutral-600 text-slate-500 dark:text-neutral-500 hover:text-red-600"><ThumbsDown size={18}/></button>
                                 </div>
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center justify-center h-[50vh] text-slate-400 dark:text-neutral-600">
-                       <div className="animate-pulse">Загрузка...</div>
-                    </div>
+                    <div className="flex items-center justify-center h-[50vh] text-slate-400 dark:text-neutral-600"><div className="animate-pulse">Загрузка...</div></div>
                 )}
             </div>
-
-            {/* --- ПРАВАЯ КОЛОНКА (Содержание статьи) --- */}
             <aside className="hidden xl:block w-64 shrink-0 sticky top-0 h-screen overflow-y-auto py-12 pr-6">
                 {selectedArticle && toc.length > 0 && (
                     <div className="animate-in fade-in slide-in-from-right-4 duration-500 delay-100">
-                        <h4 className="text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <List size={14}/> На странице
-                        </h4>
+                        <h4 className="text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wider mb-4 flex items-center gap-2"><List size={14}/> На странице</h4>
                         <div className="space-y-1 border-l border-slate-200 dark:border-white/10">
                             {toc.map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => scrollToSection(item.id)}
-                                    className={`
-                                        block w-full text-left pl-4 py-1.5 text-sm transition-colors border-l-2 -ml-[2px]
-                                        ${item.level === 'h3' ? 'pl-8 text-xs' : ''}
-                                        text-slate-500 dark:text-neutral-400 
-                                        hover:text-indigo-600 dark:hover:text-white 
-                                        hover:border-indigo-600 dark:hover:border-white border-transparent
-                                    `}
-                                >
-                                    {item.text}
-                                </button>
+                                <button key={item.id} onClick={() => scrollToSection(item.id)} className={`block w-full text-left pl-4 py-1.5 text-sm transition-colors border-l-2 -ml-[2px] ${item.level === 'h3' ? 'pl-8 text-xs' : ''} text-slate-500 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white hover:border-indigo-600 dark:hover:border-white border-transparent`}>{item.text}</button>
                             ))}
                         </div>
                     </div>
                 )}
             </aside>
-
         </div>
       </main>
     </div>

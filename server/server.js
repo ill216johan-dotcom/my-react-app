@@ -15,18 +15,18 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Путь к файлу базы знаний
+// Путь к вашей базе знаний (обратите внимание на правильный путь к public)
 const kbPath = path.join(__dirname, '../public/knowledgebase.json');
 
 let searchableDocs = [];
 
-// --- 1. ФУНКЦИЯ ОЧИСТКИ ОТ HTML (чтобы убрать лишние теги) ---
+// Функция очистки текста от HTML
 function stripHtml(html) {
     if (!html) return "";
     return html.replace(/<[^>]*>?/gm, ' ');
 }
 
-// --- 2. ЗАГРУЗКА БАЗЫ ---
+// Загрузка базы при старте
 function loadKnowledgeBase() {
     try {
         if (!fs.existsSync(kbPath)) {
@@ -38,60 +38,40 @@ function loadKnowledgeBase() {
 
         searchableDocs = [];
 
-        // Разбираем структуру JSON
+        // Разбор структуры
         if (json.categories) {
             json.categories.forEach(cat => {
-                searchableDocs.push({
-                    title: cat.title,
-                    content: stripHtml(cat.content || "") 
-                });
+                searchableDocs.push({ title: cat.title, content: stripHtml(cat.content || "") });
                 if (cat.articles) {
                     cat.articles.forEach(art => {
-                        searchableDocs.push({
-                            title: art.title,
-                            content: stripHtml(art.content || "")
-                        });
+                        searchableDocs.push({ title: art.title, content: stripHtml(art.content || "") });
                     });
                 }
             });
-        } else if (Array.isArray(json)) {
-            searchableDocs = json.map(item => ({
-                title: item.title || "Инфо",
-                content: stripHtml(item.content || JSON.stringify(item))
-            }));
         }
-
-        console.log(`✅ База загружена! Документов: ${searchableDocs.length}`);
+        console.log(`✅ База загружена! Статей: ${searchableDocs.length}`);
     } catch (err) {
-        console.error('❌ ОШИБКА чтении базы:', err);
+        console.error('❌ ОШИБКА чтения базы:', err);
     }
 }
 
 loadKnowledgeBase();
 
-// --- 3. ПОИСК ПО БАЗЕ ---
+// Простой поиск по ключевым словам
 function findRelevantContext(userQuery) {
     if (!userQuery) return "";
-    
     const queryWords = userQuery.toLowerCase().split(' ').filter(w => w.length > 3);
     
     const scoredDocs = searchableDocs.map(doc => {
         let score = 0;
         const text = (doc.title + " " + doc.content).toLowerCase();
-        queryWords.forEach(word => {
-            if (text.includes(word)) score++;
-        });
+        queryWords.forEach(word => { if (text.includes(word)) score++; });
         return { ...doc, score };
     });
 
-    const topDocs = scoredDocs
-        .filter(d => d.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3); // Берем топ-3 совпадения
-
-    // Если совпадений нет, ничего не возвращаем, пусть ИИ скажет, что не знает
+    const topDocs = scoredDocs.filter(d => d.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+    
     if (topDocs.length === 0) return "";
-
     return topDocs.map(d => `ТЕМА: ${d.title}\nИНФОРМАЦИЯ: ${d.content}`).join("\n\n---\n\n");
 }
 
@@ -99,36 +79,18 @@ app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
   const lastUserMessage = messages[messages.length - 1].content;
   
-  // Ищем контекст
   const relevantContext = findRelevantContext(lastUserMessage);
+  console.log(`🔍 Вопрос: "${lastUserMessage.slice(0, 30)}..." | Найдено контекста: ${relevantContext ? 'Да' : 'Нет'}`);
 
-  console.log(`🔍 Вопрос: "${lastUserMessage.slice(0, 30)}..."`);
-
-  // Формируем инструкцию для ИИ
-  let systemPrompt = "";
-  
-  if (relevantContext) {
-      console.log("✅ Найдена информация в базе, отправляю ИИ.");
-      systemPrompt = `
-      Ты - ассистент поддержки. Отвечай ТОЛЬКО на основе текста ниже.
-      Не придумывай. Если информации недостаточно, ответь: "В моих инструкциях нет точного ответа, обратитесь к менеджеру".
-      
-      ИНФОРМАЦИЯ ИЗ БАЗЫ:
-      ${relevantContext}
-      `;
-  } else {
-      console.log("⚠️ Информации в базе не найдено.");
-      systemPrompt = `
-      Ты - ассистент поддержки. Пользователь задал вопрос, которого нет в твоей базе знаний.
-      Вежливо ответь: "К сожалению, я не нашел ответа в своих инструкциях. Пожалуйста, перефразируйте вопрос или свяжитесь с менеджером."
-      `;
-  }
+  const systemPrompt = relevantContext 
+      ? `Ты - ассистент поддержки. Отвечай ТОЛЬКО на основе текста ниже. Не придумывай. Если информации недостаточно, скажи об этом.\n\nИНФОРМАЦИЯ ИЗ БАЗЫ:\n${relevantContext}`
+      : `Ты - ассистент поддержки. Пользователь задал вопрос, которого нет в базе знаний. Вежливо ответь, что информации пока нет, или ответь из общих знаний, если вопрос простой (например "Привет").`;
 
   try {
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'google/gemini-flash-1.5', // Без приписки :free', // Бесплатная модель
+        model: 'google/gemini-flash-1.5',
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages
@@ -136,24 +98,19 @@ app.post('/api/chat', async (req, res) => {
       },
       {
         headers: {
-          // --- ВНИМАНИЕ: Если .env не работает, вставь ключ ниже вместо process.env... ---
+          // Вставьте сюда ваш ключ OpenRouter, если .env не работает
           'Authorization': `Bearer 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`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'http://localhost:3000', 
-          'X-Title': 'FF Support',
         }
       }
     );
-
-    const aiMessage = response.data.choices[0].message;
-    res.json(aiMessage);
-
+    res.json(response.data.choices[0].message);
   } catch (error) {
     console.error('Ошибка API:', error.response?.data || error.message);
     res.status(500).json({ error: 'Ошибка сервера AI' });
   }
 });
 
-const PORT = process.env.PORT || 3001;
-// Вот исправленная последняя строка:
+const PORT = 3001;
 app.listen(PORT, () => console.log('Сервер запущен на порту ' + PORT));
