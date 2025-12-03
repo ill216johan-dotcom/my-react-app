@@ -81,13 +81,19 @@ const CalculatorLayout = ({ children, title }) => {
     }
   };
 
-  const navItems = [
-    { path: '/', label: 'Knowledge Base', exact: true },
-    { path: '/calculator', label: 'FBO Calculator' },
-    { path: '/ozon-calculator', label: 'Ozon Calculator' },
-    { path: '/packaging-calculator', label: 'Packaging' },
-    { path: '/exchange', label: 'Exchange' },
+  // Base navigation items
+  const baseNavItems = [
+    { path: '/', label: 'База знаний', exact: true },
+    { path: '/calculator', label: 'Калькулятор WB FBO' },
+    { path: '/ozon-calculator', label: 'Калькулятор Ozon FBO' },
+    { path: '/packaging-calculator', label: 'Калькулятор упаковки' },
+    { path: '/exchange', label: 'Биржа упаковки' },
   ];
+
+  // Add Admin Panel for admins only
+  const navItems = profile?.role === 'admin' 
+    ? [...baseNavItems, { path: '/admin', label: '⚙️ Админ-панель' }]
+    : baseNavItems;    
 
   const isActive = (item) => {
     if (item.exact) {
@@ -100,10 +106,10 @@ const CalculatorLayout = ({ children, title }) => {
     <div className={`min-h-screen flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a]' : 'bg-slate-50'}`}>
       {/* Compact Single-Row Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-black border-b border-slate-200 dark:border-neutral-800 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="w-full px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 flex-nowrap">
             {/* Left: Logo + Navigation */}
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-4 lg:gap-8 flex-shrink-0">
               {/* Logo */}
               <Link to="/" className="flex-shrink-0">
                 <img 
@@ -137,12 +143,12 @@ const CalculatorLayout = ({ children, title }) => {
             </div>
 
             {/* Right: User Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
                 className="p-2 rounded-md text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
-                title={isDarkMode ? 'Light Mode' : 'Dark Mode'}
+                title={isDarkMode ? 'Светлая тема' : 'Темная тема'}
               >
                 {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
@@ -155,12 +161,12 @@ const CalculatorLayout = ({ children, title }) => {
               ) : user ? (
                 <div className="flex items-center gap-2">
                   {/* User Profile Badge */}
-                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-neutral-900 rounded-md border border-slate-200 dark:border-neutral-800">
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-neutral-900 rounded-md border border-slate-200 dark:border-neutral-800 max-w-xs">
                     <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
                       <User size={14} className="text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <span className="text-sm font-medium text-slate-900 dark:text-white">
-                      {profile?.full_name?.split(' ')[0] || 'User'}
+                    <span className="text-sm font-medium text-slate-900 dark:text-white truncate sm:max-w-[120px] md:max-w-none">
+                      {profile?.full_name || 'Пользователь'}
                     </span>
                   </div>
                   
@@ -168,7 +174,7 @@ const CalculatorLayout = ({ children, title }) => {
                   <button
                     onClick={handleSignOut}
                     className="p-2 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
-                    title="Sign Out"
+                    title="Выйти"
                   >
                     <LogOut size={18} />
                   </button>
@@ -179,7 +185,7 @@ const CalculatorLayout = ({ children, title }) => {
                   className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-sm"
                 >
                   <LogIn size={16} />
-                  <span>Sign In</span>
+                  <span>Войти</span>
                 </Link>
               )}
             </div>
@@ -188,7 +194,7 @@ const CalculatorLayout = ({ children, title }) => {
 
         {/* Mobile Navigation Dropdown */}
         <div className="md:hidden border-t border-slate-200 dark:border-neutral-800">
-          <nav className="px-4 py-2 flex gap-1 overflow-x-auto">
+          <nav className="w-full px-6 py-2 flex gap-1 overflow-x-auto">
             {navItems.map((item) => (
               <Link
                 key={item.path}
@@ -207,7 +213,7 @@ const CalculatorLayout = ({ children, title }) => {
       </header>
 
       {/* Main Content Area - with padding to account for fixed header */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 md:pt-20 pb-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 lg:px-8 pt-24 md:pt-20 pb-8">
         {title && (
           <h1 className="text-3xl md:text-4xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
             {title}

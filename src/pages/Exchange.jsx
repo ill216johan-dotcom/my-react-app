@@ -11,9 +11,9 @@ import CalculatorLayout from '../components/CalculatorLayout';
 
 // Format date for display
 const formatDate = (dateString) => {
-  if (!dateString) return 'Not set';
+  if (!dateString) return 'Не установлено';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { 
+  return date.toLocaleDateString('ru-RU', { 
     year: 'numeric', 
     month: 'short', 
     day: 'numeric' 
@@ -22,9 +22,9 @@ const formatDate = (dateString) => {
 
 // Format date with time for manager dashboard
 const formatDateWithTime = (dateString) => {
-  if (!dateString) return 'Not set';
+  if (!dateString) return 'Не установлено';
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-US', { 
+  return date.toLocaleDateString('ru-RU', { 
     year: 'numeric', 
     month: 'short', 
     day: 'numeric',
@@ -53,6 +53,30 @@ const getStatusBadgeColor = (status) => {
       return 'bg-red-100 text-red-800 border border-red-200';
     default:
       return 'bg-slate-100 text-slate-800 border border-slate-200';
+  }
+};
+
+// Get status display text in Russian
+const getStatusDisplayText = (status) => {
+  switch (status) {
+    case 'searching':
+      return 'Поиск исполнителя';
+    case 'booked':
+      return 'В работе';
+    case ORDER_STATUSES.OPEN:
+    case 'open':
+      return 'Открыт';
+    case ORDER_STATUSES.IN_PROGRESS:
+    case 'in_progress':
+      return 'В процессе';
+    case ORDER_STATUSES.COMPLETED:
+    case 'completed':
+      return 'Выполнен';
+    case ORDER_STATUSES.CANCELLED:
+    case 'cancelled':
+      return 'Отменен';
+    default:
+      return status;
   }
 };
 
@@ -112,7 +136,7 @@ function Exchange() {
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-            <p className="mt-4 text-slate-600 dark:text-slate-400">Loading your profile...</p>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">Загрузка вашего профиля...</p>
           </div>
         </div>
       </CalculatorLayout>
@@ -124,10 +148,10 @@ function Exchange() {
       {/* Description */}
       <div className="mb-6">
         <p className="text-slate-600 dark:text-slate-400">
-          {profile?.role === USER_ROLES.CLIENT && 'Create orders and manage your packaging requests'}
-          {profile?.role === USER_ROLES.PACKER && 'Browse available orders and manage your work'}
-          {(profile?.role === USER_ROLES.MANAGER || profile?.role === USER_ROLES.ADMIN) && 'Manage all orders and resolve disputes'}
-          {!profile?.role && 'Welcome to the Exchange'}
+          {profile?.role === USER_ROLES.CLIENT && 'Создавайте заказы и управляйте вашими запросами на упаковку'}
+          {profile?.role === USER_ROLES.PACKER && 'Просматривайте доступные заказы и управляйте вашей работой'}
+          {(profile?.role === USER_ROLES.MANAGER || profile?.role === USER_ROLES.ADMIN) && 'Управляйте всеми заказами и разрешайте споры'}
+          {!profile?.role && 'Добро пожаловать на биржу'}
         </p>
       </div>
 
@@ -137,7 +161,7 @@ function Exchange() {
           <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
           </svg>
-          {profile?.role || 'No role assigned'}
+          {profile?.role || 'Роль не назначена'}
         </div>
       </div>
 
@@ -148,7 +172,7 @@ function Exchange() {
       
       {!profile?.role && (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-6">
-          <p className="text-slate-600 dark:text-slate-400">Your role has not been assigned yet. Please contact an administrator.</p>
+          <p className="text-slate-600 dark:text-slate-400">Ваша роль еще не назначена. Пожалуйста, свяжитесь с администратором.</p>
         </div>
       )}
     </CalculatorLayout>
@@ -172,6 +196,11 @@ function ClientDashboard({ user }) {
   const [chatOrder, setChatOrder] = useState(null); // Track which order's chat is open
   const [chatPackerId, setChatPackerId] = useState(null); // Track which packer to chat with
   const [profile, setProfile] = useState(null); // User profile for chat
+  
+  // NEW: Focus view state
+  const [focusedOrder, setFocusedOrder] = useState(null); // Current order in focus view
+  const [showItemsModal, setShowItemsModal] = useState(false); // Items table modal
+  const [showCreateForm, setShowCreateForm] = useState(false); // Create order form modal
   
   // Excel import state
   const [importedItems, setImportedItems] = useState([]);
@@ -227,7 +256,7 @@ function ClientDashboard({ user }) {
 
       if (error) {
         console.error('Error fetching orders:', error);
-        alert('Failed to load orders. Please try again.');
+        alert('Не удалось загрузить заказы. Попробуйте еще раз.');
       } else {
         setMyOrders(data || []);
         // Fetch bid counts for all orders
@@ -323,7 +352,7 @@ function ClientDashboard({ user }) {
 
       if (error) {
         console.error('Error fetching bids:', error);
-        alert('Failed to load bids. Please try again.');
+        alert('Не удалось загрузить предложения. Попробуйте еще раз.');
       } else {
         setOrderBids(prev => ({
           ...prev,
@@ -353,7 +382,7 @@ function ClientDashboard({ user }) {
   };
 
   const handleAcceptBid = async (bid, orderId) => {
-    if (!confirm(`Accept bid from ${bid.profiles?.full_name || 'this packer'} for $${parseFloat(bid.price).toFixed(2)}?`)) {
+    if (!confirm(`Принять предложение от ${bid.profiles?.full_name || 'этого упаковщика'} за $${parseFloat(bid.price).toFixed(2)}?`)) {
       return;
     }
 
@@ -370,7 +399,7 @@ function ClientDashboard({ user }) {
 
       if (orderError) {
         console.error('Error updating order:', orderError);
-        alert('Failed to update order. Please try again.');
+        alert('Не удалось обновить заказ. Попробуйте еще раз.');
         return;
       }
 
@@ -382,7 +411,7 @@ function ClientDashboard({ user }) {
 
       if (bidError) {
         console.error('Error updating bid:', bidError);
-        alert('Failed to accept bid. Please try again.');
+        alert('Не удалось принять предложение. Попробуйте еще раз.');
         return;
       }
 
@@ -399,7 +428,7 @@ function ClientDashboard({ user }) {
       }
 
       // Success!
-      alert('Offer accepted! Order has been booked. 🎉');
+      alert('Предложение принято! Заказ забронирован. 🎉');
       
       // Close chat if open
       setChatOrder(null);
@@ -434,7 +463,7 @@ function ClientDashboard({ user }) {
     if (bid) {
       await handleAcceptBid(bid, chatOrder.id);
     } else {
-      alert('Could not find bid information.');
+      alert('Не удалось найти информацию о предложении.');
     }
   };
 
@@ -546,16 +575,16 @@ function ClientDashboard({ user }) {
           description: summary + (prev.description ? '\n\n' + prev.description : '')
         }));
         
-        alert(`Successfully imported ${parsedItems.length} items!`);
+        alert(`Успешно импортировано ${parsedItems.length} товаров!`);
         
       } catch (error) {
         console.error('Error parsing Excel file:', error);
-        alert('Failed to parse Excel file. Please check the file format and try again.');
+        alert('Не удалось обработать Excel файл. Проверьте формат файла и попробуйте еще раз.');
       }
     };
     
     reader.onerror = () => {
-      alert('Failed to read file. Please try again.');
+      alert('Не удалось прочитать файл. Попробуйте еще раз.');
     };
     
     // Read file as ArrayBuffer
@@ -609,13 +638,13 @@ function ClientDashboard({ user }) {
     e.preventDefault();
     
     if (!user) {
-      alert('You must be logged in to create an order.');
+      alert('Вы должны войти в систему, чтобы создать заказ.');
       return;
     }
 
     // Validation
     if (!formData.title.trim()) {
-      alert('Please enter a title for your order.');
+      alert('Пожалуйста, введите название заказа.');
       return;
     }
 
@@ -640,10 +669,10 @@ function ClientDashboard({ user }) {
 
       if (error) {
         console.error('Error creating order:', error);
-        alert('Failed to create order. Please try again.');
+        alert('Не удалось создать заказ. Попробуйте еще раз.');
       } else {
         // Success!
-        alert('Order created successfully! 🎉');
+        alert('Заказ успешно создан! 🎉');
         
         // Clear form and imported data
         setFormData({
@@ -667,10 +696,131 @@ function ClientDashboard({ user }) {
     }
   };
 
+  // Open order in focus view
+  const openOrderFocus = (order) => {
+    setFocusedOrder(order);
+    // Load bids if status is searching
+    if (order.status === 'searching') {
+      fetchBidsForOrder(order.id);
+    }
+  };
+
+  // Close focus view, return to dashboard
+  const closeFocusView = () => {
+    setFocusedOrder(null);
+    setShowItemsModal(false);
+    setChatOrder(null);
+    setChatPackerId(null);
+  };
+
+  // If an order is focused, show Order Focus View
+  if (focusedOrder) {
+    return (
+      <OrderFocusView
+        order={focusedOrder}
+        user={user}
+        profile={profile}
+        orderBids={orderBids}
+        loadingBids={loadingBids}
+        acceptingBid={acceptingBid}
+        acceptedPackers={acceptedPackers}
+        chatOrder={chatOrder}
+        chatPackerId={chatPackerId}
+        showItemsModal={showItemsModal}
+        onBack={closeFocusView}
+        onOpenItems={() => setShowItemsModal(true)}
+        onCloseItems={() => setShowItemsModal(false)}
+        onOpenChat={(packerId) => {
+          setChatOrder(focusedOrder);
+          setChatPackerId(packerId);
+        }}
+        onCloseChat={() => {
+          setChatOrder(null);
+          setChatPackerId(null);
+        }}
+        onAcceptBid={handleAcceptBid}
+        onHirePacker={handleHirePackerFromChat}
+      />
+    );
+  }
+
+  // Dashboard View
   return (
     <>
-      {/* Excel Import Section */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-6">
+      {/* Dashboard: Grid of Order Cards */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Мои заказы</h2>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Создать заказ
+          </button>
+        </div>
+
+        {loadingOrders ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : myOrders.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700">
+            <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">Заказов пока нет</p>
+            <p className="text-sm text-slate-500 dark:text-slate-500 mb-4">Создайте ваш первый заказ, чтобы начать!</p>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition shadow-sm"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Создать заказ
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {myOrders.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                bidCount={orderBids[order.id]?.count || 0}
+                acceptedPacker={acceptedPackers[order.id]}
+                onClick={() => openOrderFocus(order)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create Order Form Modal */}
+      {showCreateForm && (
+        <CreateOrderModal
+          user={user}
+          importedItems={importedItems}
+          totalQuantity={totalQuantity}
+          showTable={showTable}
+          showImportedData={showImportedData}
+          formData={formData}
+          submitting={submitting}
+          onClose={() => setShowCreateForm(false)}
+          onFileUpload={handleFileUpload}
+          onToggleTable={() => setShowTable(!showTable)}
+          onItemEdit={handleItemEdit}
+          onDeleteItem={handleDeleteItem}
+          onInputChange={handleInputChange}
+          onSubmit={handleSubmit}
+        />
+      )}
+
+      {/* Excel Import Section for Create Form - Keep this structure */}
+      <div className="hidden">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 mb-6">
         <h3 className="text-lg font-semibold text-slate-900 mb-2">Upload Excel Template</h3>
         <p className="text-slate-500 text-sm mb-4">
           Import your order items from an Excel file (.xls, .xlsx, .csv). 
@@ -1056,14 +1206,14 @@ function ClientDashboard({ user }) {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
                         </svg>
-                        Hide Bids
+                        Скрыть отклики
                       </>
                     ) : (
                       <>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
-                        View Bids ({orderBids[order.id]?.count || 0})
+                        Смотреть отклики ({orderBids[order.id]?.count || 0})
                       </>
                     )}
                   </button>
@@ -1072,15 +1222,15 @@ function ClientDashboard({ user }) {
                 {/* Expanded Bids View */}
                 {expandedOrder === order.id && (
                   <div className="mt-4 border-t border-slate-200 pt-4">
-                    <h5 className="font-semibold text-slate-900 text-sm mb-3">Offers from Packers</h5>
+                    <h5 className="font-semibold text-slate-900 text-sm mb-3">Предложения от упаковщиков</h5>
                     
                     {loadingBids ? (
                       <div className="text-center py-4">
                         <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-600"></div>
-                        <p className="mt-2 text-sm text-slate-600">Loading bids...</p>
+                        <p className="mt-2 text-sm text-slate-600">Загрузка откликов...</p>
                       </div>
                     ) : !orderBids[order.id]?.bids || orderBids[order.id].bids.length === 0 ? (
-                      <p className="text-center text-slate-500 text-sm py-4">No bids yet. Waiting for packers to respond...</p>
+                      <p className="text-center text-slate-500 text-sm py-4">Откликов пока нет. Ожидаем ответа упаковщиков...</p>
                     ) : (
                       <div className="space-y-3">
                         {orderBids[order.id].bids.map((bid) => (
@@ -1103,15 +1253,15 @@ function ClientDashboard({ user }) {
                                 
                                 {/* Bid Details */}
                                 <div className="flex-1">
-                                  <p className="font-semibold text-slate-900">{bid.profiles?.full_name || 'Packer'}</p>
+                                  <p className="font-semibold text-slate-900">{bid.profiles?.full_name || 'Упаковщик'}</p>
                                   <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
                                     <div>
-                                      <span className="text-slate-500 text-xs">Price:</span>
+                                      <span className="text-slate-500 text-xs">Цена:</span>
                                       <p className="font-semibold text-slate-900">${parseFloat(bid.price).toFixed(2)}</p>
                                     </div>
                                     <div>
-                                      <span className="text-slate-500 text-xs">Days:</span>
-                                      <p className="font-semibold text-slate-900">{bid.days_to_complete} days</p>
+                                      <span className="text-slate-500 text-xs">Дней:</span>
+                                      <p className="font-semibold text-slate-900">{bid.days_to_complete} дн.</p>
                                     </div>
                                   </div>
                                   {bid.comment && (
@@ -1139,7 +1289,7 @@ function ClientDashboard({ user }) {
                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                                   </svg>
-                                  Chat
+                                  Чат
                                 </button>
 
                                 {/* Accept Button */}
@@ -1151,7 +1301,7 @@ function ClientDashboard({ user }) {
                                       acceptingBid ? 'opacity-50 cursor-not-allowed' : ''
                                     }`}
                                   >
-                                    Бронировать
+                                    Принять
                                   </button>
                                 )}
                               </div>
@@ -1176,7 +1326,7 @@ function ClientDashboard({ user }) {
                         </div>
                         {acceptedPackers[order.id] && (
                           <p className="text-sm text-emerald-700 ml-7">
-                            Assigned to: <span className="font-semibold">{acceptedPackers[order.id]}</span>
+                            Назначен: <span className="font-semibold">{acceptedPackers[order.id]}</span>
                           </p>
                         )}
                       </div>
@@ -1188,7 +1338,7 @@ function ClientDashboard({ user }) {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                           </svg>
-                          Open Chat
+                          Открыть чат
                         </button>
                       )}
                     </div>
@@ -1306,6 +1456,7 @@ function ClientDashboard({ user }) {
           </div>
         </div>
       )}
+      </div>
     </>
   );
 }
@@ -1399,7 +1550,7 @@ function PackerDashboard({ user }) {
 
       if (error) {
         console.error('Error fetching marketplace orders:', error);
-        alert('Failed to load marketplace orders. Please try again.');
+        alert('Не удалось загрузить заказы с биржи. Попробуйте еще раз.');
       } else {
         setMarketplaceOrders(data || []);
       }
@@ -1455,12 +1606,12 @@ function PackerDashboard({ user }) {
 
     // Validation
     if (!bidData.price || parseFloat(bidData.price) <= 0) {
-      alert('Please enter a valid price.');
+      alert('Пожалуйста, введите корректную цену.');
       return;
     }
 
     if (!bidData.days_to_complete || parseInt(bidData.days_to_complete) <= 0) {
-      alert('Please enter valid days to complete.');
+      alert('Пожалуйста, введите корректное количество дней.');
       return;
     }
 
@@ -1482,10 +1633,10 @@ function PackerDashboard({ user }) {
 
       if (error) {
         console.error('Error submitting bid:', error);
-        alert('Failed to submit bid. Please try again.');
+        alert('Не удалось отправить отклик. Попробуйте еще раз.');
       } else {
         // Success!
-        alert('Bid sent successfully! 🎉');
+        alert('Отклик успешно отправлен! 🎉');
         
         // Close modal
         setShowBidModal(false);
@@ -1527,7 +1678,7 @@ function PackerDashboard({ user }) {
                 : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            Marketplace
+            Биржа заказов
           </button>
           <button
             onClick={() => setView('active')}
@@ -1537,7 +1688,7 @@ function PackerDashboard({ user }) {
                 : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            My Active Orders ({myActiveOrders.length})
+            Мои активные заказы ({myActiveOrders.length})
           </button>
         </div>
       </div>
@@ -1545,7 +1696,7 @@ function PackerDashboard({ user }) {
       {/* Marketplace Feed */}
       {view === 'marketplace' && (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-6">Marketplace - Available Orders</h3>
+          <h3 className="text-lg font-semibold text-slate-900 mb-6">Биржа - Доступные заказы</h3>
         
         {loadingOrders ? (
           <div className="text-center py-8">
@@ -1557,8 +1708,8 @@ function PackerDashboard({ user }) {
             <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
             </svg>
-            <p className="mt-4 text-lg text-slate-600">No orders available</p>
-            <p className="text-sm text-slate-500">Check back later for new opportunities!</p>
+            <p className="mt-4 text-lg text-slate-600">Нет доступных заказов</p>
+            <p className="text-sm text-slate-500">Зайдите позже, чтобы увидеть новые заказы!</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -1570,7 +1721,7 @@ function PackerDashboard({ user }) {
                 <div className="flex justify-between items-start mb-3">
                   <h4 className="text-base font-semibold text-slate-900">{order.title}</h4>
                   <span className="px-3 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
-                    searching
+                    {getStatusDisplayText('searching')}
                   </span>
                 </div>
                 
@@ -1580,17 +1731,17 @@ function PackerDashboard({ user }) {
                 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mb-4">
                   <div>
-                    <span className="text-slate-500 text-xs">Budget:</span>
+                    <span className="text-slate-500 text-xs">Бюджет:</span>
                     <p className="font-medium text-slate-900">
-                      {order.budget ? `$${parseFloat(order.budget).toFixed(2)}` : 'Not specified'}
+                      {order.budget ? `$${parseFloat(order.budget).toFixed(2)}` : 'Не указан'}
                     </p>
                   </div>
                   <div>
-                    <span className="text-slate-500 text-xs">Deadline:</span>
+                    <span className="text-slate-500 text-xs">Дедлайн:</span>
                     <p className="font-medium text-slate-900">{formatDate(order.deadline)}</p>
                   </div>
                   <div>
-                    <span className="text-slate-500 text-xs">Posted:</span>
+                    <span className="text-slate-500 text-xs">Размещен:</span>
                     <p className="font-medium text-slate-900">{formatDate(order.created_at)}</p>
                   </div>
                 </div>
@@ -1601,14 +1752,14 @@ function PackerDashboard({ user }) {
                     <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    Bid Sent
+                    Отклик отправлен
                   </div>
                 ) : (
                   <button
                     onClick={() => handleBidClick(order)}
                     className="w-full px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition text-sm"
                   >
-                    Откликнуться (Place Bid)
+                    Откликнуться
                   </button>
                 )}
               </div>
@@ -1621,15 +1772,15 @@ function PackerDashboard({ user }) {
       {/* My Active Orders View */}
       {view === 'active' && (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-slate-900 mb-6">My Active Orders</h3>
+          <h3 className="text-lg font-semibold text-slate-900 mb-6">Мои активные заказы</h3>
           
           {myActiveOrders.length === 0 ? (
             <div className="text-center py-12">
               <svg className="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <p className="mt-4 text-lg text-slate-600">No active orders</p>
-              <p className="text-sm text-slate-500">Your accepted orders will appear here</p>
+              <p className="mt-4 text-lg text-slate-600">Нет активных заказов</p>
+              <p className="text-sm text-slate-500">Принятые заказы будут отображаться здесь</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -1643,14 +1794,14 @@ function PackerDashboard({ user }) {
                       <div className="flex items-center gap-3 mb-2">
                         <h4 className="text-base font-semibold text-slate-900">{order.title}</h4>
                         <span className={`px-3 py-1 rounded-md text-xs font-medium ${getStatusBadgeColor(order.status)}`}>
-                          {order.status}
+                          {getStatusDisplayText(order.status)}
                         </span>
                         {order.is_disputed && (
                           <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-600 text-white">
                             <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
-                            DISPUTED
+                            СПОР
                           </span>
                         )}
                       </div>
@@ -1661,8 +1812,8 @@ function PackerDashboard({ user }) {
 
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                         <div>
-                          <span className="text-slate-500 text-xs">Client:</span>
-                          <p className="font-medium text-slate-900">{order.client?.full_name || 'Unknown'}</p>
+                          <span className="text-slate-500 text-xs">Клиент:</span>
+                          <p className="font-medium text-slate-900">{order.client?.full_name || 'Неизвестен'}</p>
                         </div>
                         <div>
                           <span className="text-slate-500 text-xs">Budget:</span>
@@ -1686,7 +1837,7 @@ function PackerDashboard({ user }) {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                    Open Chat with Client
+                    Открыть чат с клиентом
                   </button>
                 </div>
               ))}
@@ -1700,7 +1851,7 @@ function PackerDashboard({ user }) {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg border border-slate-200 shadow-xl max-w-md w-full p-6">
             <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">Place Your Bid</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Разместить ваш отклик</h3>
               <button
                 onClick={() => setShowBidModal(false)}
                 className="text-slate-400 hover:text-slate-600 transition"
@@ -1713,14 +1864,14 @@ function PackerDashboard({ user }) {
 
             <div className="mb-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
               <p className="font-medium text-slate-900">{selectedOrder.title}</p>
-              <p className="text-sm text-slate-600">Budget: {selectedOrder.budget ? `$${parseFloat(selectedOrder.budget).toFixed(2)}` : 'Not specified'}</p>
+              <p className="text-sm text-slate-600">Бюджет: {selectedOrder.budget ? `$${parseFloat(selectedOrder.budget).toFixed(2)}` : 'Не указан'}</p>
             </div>
 
             <form onSubmit={handleSubmitBid} className="space-y-4">
               {/* Price */}
               <div>
                 <label htmlFor="price" className="block text-sm font-medium text-slate-700 mb-2">
-                  Your Price <span className="text-red-500">*</span>
+                  Ваша цена <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-500">$</span>
@@ -1742,7 +1893,7 @@ function PackerDashboard({ user }) {
               {/* Days to Complete */}
               <div>
                 <label htmlFor="days_to_complete" className="block text-sm font-medium text-slate-700 mb-2">
-                  Days to Complete <span className="text-red-500">*</span>
+                  Дней на выполнение <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -1750,7 +1901,7 @@ function PackerDashboard({ user }) {
                   name="days_to_complete"
                   value={bidData.days_to_complete}
                   onChange={handleBidInputChange}
-                  placeholder="e.g., 7"
+                    placeholder="например, 7"
                   min="1"
                   className="w-full px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900"
                   required
@@ -1760,14 +1911,14 @@ function PackerDashboard({ user }) {
               {/* Comment */}
               <div>
                 <label htmlFor="comment" className="block text-sm font-medium text-slate-700 mb-2">
-                  Comment (Optional)
+                  Комментарий (опционально)
                 </label>
                 <textarea
                   id="comment"
                   name="comment"
                   value={bidData.comment}
                   onChange={handleBidInputChange}
-                  placeholder="Add any additional information..."
+                  placeholder="Добавьте дополнительную информацию..."
                   rows={3}
                   className="w-full px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none text-slate-900"
                 />
@@ -1780,7 +1931,7 @@ function PackerDashboard({ user }) {
                   onClick={() => setShowBidModal(false)}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50 transition text-sm font-medium"
                 >
-                  Cancel
+                  Отмена
                 </button>
                 <button
                   type="submit"
@@ -1789,7 +1940,7 @@ function PackerDashboard({ user }) {
                     submittingBid ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
-                  {submittingBid ? 'Sending...' : 'Submit Bid'}
+                  {submittingBid ? 'Отправка...' : 'Отправить отклик'}
                 </button>
               </div>
             </form>
@@ -1835,6 +1986,38 @@ function ManagerDashboard({ user, profile }) {
   const [loading, setLoading] = useState(false);
   const [chatOrder, setChatOrder] = useState(null);
   const [view, setView] = useState('disputed'); // 'disputed' or 'all'
+  const [currentUserProfile, setCurrentUserProfile] = useState(profile);
+
+  // Ban user function (Admin only)
+  const handleBanUser = async (userId, userName) => {
+    if (!userId) return;
+    if (profile?.role !== 'admin') {
+      alert('Только администраторы могут блокировать пользователей.');
+      return;
+    }
+    
+    const confirmed = confirm(`Вы уверены, что хотите заблокировать пользователя ${userName || 'этого'}? Это действие отключит их доступ к системе.`);
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ is_banned: true })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error banning user:', error);
+        alert('Не удалось заблокировать пользователя. Попробуйте еще раз.');
+      } else {
+        alert(`Пользователь ${userName || ''} успешно заблокирован.`);
+        fetchAllOrders(); // Refresh the list
+        fetchDisputedOrders(); // Refresh disputed orders too
+      }
+    } catch (error) {
+      console.error('Error in handleBanUser:', error);
+      alert('Произошла непредвиденная ошибка.');
+    }
+  }
 
   useEffect(() => {
     if (user) {
@@ -1858,7 +2041,7 @@ function ManagerDashboard({ user, profile }) {
 
       if (error) {
         console.error('Error fetching disputed orders:', error);
-        alert('Failed to load disputed orders.');
+        alert('Не удалось загрузить спорные заказы.');
       } else {
         setDisputedOrders(data || []);
       }
@@ -1900,7 +2083,7 @@ function ManagerDashboard({ user, profile }) {
   };
 
   const handleResolveDispute = async (orderId) => {
-    if (!confirm('Mark this dispute as resolved?')) return;
+    if (!confirm('Отметить этот спор как разрешенный?')) return;
 
     try {
       const { error } = await supabase
@@ -1910,7 +2093,7 @@ function ManagerDashboard({ user, profile }) {
 
       if (error) {
         console.error('Error resolving dispute:', error);
-        alert('Failed to resolve dispute.');
+        alert('Не удалось разрешить спор.');
         return;
       }
 
@@ -1918,13 +2101,13 @@ function ManagerDashboard({ user, profile }) {
       const systemMessageData = {
         order_id: orderId,
         sender_id: user.id,
-        content: 'Dispute resolved by manager. ✅',
+        content: 'Спор разрешен менеджером. ✅',
         is_system_message: true
       };
 
       await supabase.from('messages').insert([systemMessageData]);
 
-      alert('Dispute resolved successfully!');
+      alert('Спор успешно разрешен!');
       fetchDisputedOrders();
       fetchAllOrders();
     } catch (error) {
@@ -1940,7 +2123,7 @@ function ManagerDashboard({ user, profile }) {
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-slate-900">
-            Manager Dashboard - Order Management
+            Панель менеджера - Управление заказами
           </h3>
           
           {/* View Toggle */}
@@ -1953,7 +2136,7 @@ function ManagerDashboard({ user, profile }) {
                   : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
               }`}
             >
-              Disputed Orders ({disputedOrders.length})
+              Спорные заказы ({disputedOrders.length})
             </button>
             <button
               onClick={() => setView('all')}
@@ -1963,7 +2146,7 @@ function ManagerDashboard({ user, profile }) {
                   : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
               }`}
             >
-              All Orders ({allOrders.length})
+              Все заказы ({allOrders.length})
             </button>
           </div>
         </div>
@@ -1979,10 +2162,10 @@ function ManagerDashboard({ user, profile }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             <p className="mt-4 text-lg text-slate-600">
-              {view === 'disputed' ? 'No disputed orders' : 'No orders found'}
+              {view === 'disputed' ? 'Нет спорных заказов' : 'Заказы не найдены'}
             </p>
             <p className="text-sm text-slate-500">
-              {view === 'disputed' ? 'All disputes have been resolved!' : 'Orders will appear here'}
+              {view === 'disputed' ? 'Все споры разрешены!' : 'Заказы будут отображаться здесь'}
             </p>
           </div>
         ) : (
@@ -2017,12 +2200,38 @@ function ManagerDashboard({ user, profile }) {
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-slate-500 text-xs">Client:</span>
-                        <p className="font-medium text-slate-900">{order.client?.full_name || 'Unknown'}</p>
+                        <span className="text-slate-500 text-xs">Клиент:</span>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-900">{order.client?.full_name || 'Неизвестен'}</p>
+                          {currentUserProfile?.role === 'admin' && order.client_id && (
+                            <button
+                              onClick={() => handleBanUser(order.client_id, order.client?.full_name)}
+                              className="p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
+                              title="Заблокировать пользователя"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div>
-                        <span className="text-slate-500 text-xs">Packer:</span>
-                        <p className="font-medium text-slate-900">{order.packer?.full_name || 'Not assigned'}</p>
+                        <span className="text-slate-500 text-xs">Упаковщик:</span>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-900">{order.packer?.full_name || 'Не назначен'}</p>
+                          {currentUserProfile?.role === 'admin' && order.accepted_packer_id && (
+                            <button
+                              onClick={() => handleBanUser(order.accepted_packer_id, order.packer?.full_name)}
+                              className="p-1 rounded hover:bg-red-100 text-red-600 transition-colors"
+                              title="Заблокировать пользователя"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="text-slate-500 text-xs">Budget:</span>
@@ -2047,7 +2256,7 @@ function ManagerDashboard({ user, profile }) {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                     </svg>
-                    View Chat
+                    Открыть чат
                   </button>
 
                   {order.is_disputed && (
@@ -2058,7 +2267,7 @@ function ManagerDashboard({ user, profile }) {
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      Resolve Dispute
+                      Разрешить спор
                     </button>
                   )}
                 </div>
@@ -2093,6 +2302,491 @@ function ManagerDashboard({ user, profile }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * OrderCard Component
+ * Card representation of an order for the dashboard grid
+ */
+function OrderCard({ order, bidCount, acceptedPacker, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-5 hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-700 transition cursor-pointer"
+    >
+      {/* Header: Title + Status */}
+      <div className="flex items-start justify-between mb-3">
+        <h3 className="text-base font-semibold text-slate-900 dark:text-white line-clamp-2 flex-1">
+          {order.title}
+        </h3>
+        <span className={`ml-2 flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium ${getStatusBadgeColor(order.status)}`}>
+          {order.status}
+        </span>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Товаров</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {order.items?.length || 0}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Бюджет</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {order.budget ? `$${parseFloat(order.budget).toFixed(2)}` : 'Не задано'}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Дедлайн</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {formatDate(order.deadline)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {order.status === 'searching' ? 'Предложений' : 'Статус'}
+          </p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {order.status === 'searching' ? `${bidCount}` : acceptedPacker || 'Активен'}
+          </p>
+        </div>
+      </div>
+
+      {/* Action Button */}
+      <button className="w-full px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 font-medium rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition text-sm">
+        {order.status === 'searching' ? 'Смотреть предложения' : 'Открыть заказ'}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * CreateOrderModal Component
+ * Modal for creating new orders with Excel import
+ */
+function CreateOrderModal({ 
+  user, importedItems, totalQuantity, showTable, showImportedData, formData, submitting,
+  onClose, onFileUpload, onToggleTable, onItemEdit, onDeleteItem, onInputChange, onSubmit 
+}) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+          <h2 className="text-xl font-semibold text-slate-900 dark:text-white">Создать новый заказ</h2>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Excel Import Section */}
+          <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Загрузить Excel шаблон (опционально)</h3>
+            <p className="text-slate-500 dark:text-slate-400 text-xs mb-3">
+              Импортируйте товары из Excel файла (.xls, .xlsx, .csv). Данные начинаются со строки 3.
+            </p>
+            
+            <div className="flex items-center gap-4">
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".xls,.xlsx,.csv"
+                  onChange={onFileUpload}
+                  className="hidden"
+                />
+                <span className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Загрузить файл
+                </span>
+              </label>
+              
+              {importedItems.length > 0 && (
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span className="font-medium">{importedItems.length} товаров ({totalQuantity} шт.)</span>
+                </div>
+              )}
+            </div>
+
+            {/* Show/Hide Table Button */}
+            {showImportedData && importedItems.length > 0 && (
+              <button
+                onClick={onToggleTable}
+                className="mt-3 inline-flex items-center gap-2 px-3 py-2 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-medium rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              >
+                {showTable ? 'Скрыть таблицу товаров' : 'Показать таблицу товаров'}
+              </button>
+            )}
+          </div>
+
+          {/* Order Form */}
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Название заказа <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={onInputChange}
+                placeholder="например, Упаковать 100 футболок"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900 dark:text-white text-sm"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Описание
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={onInputChange}
+                placeholder="Предоставьте детали вашего заказа..."
+                rows={4}
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition resize-none text-slate-900 dark:text-white text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Бюджет (опционально)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 text-sm">$</span>
+                  <input
+                    type="number"
+                    name="budget"
+                    value={formData.budget}
+                    onChange={onInputChange}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    className="w-full pl-8 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900 dark:text-white text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Дедлайн (опционально)
+                </label>
+                <input
+                  type="date"
+                  name="deadline"
+                  value={formData.deadline}
+                  onChange={onInputChange}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900 dark:text-white text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className={`px-6 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition shadow-sm text-sm ${
+                  submitting ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {submitting ? 'Создание...' : 'Создать заказ'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * OrderFocusView Component
+ * Detailed view of a single order with chat-first design
+ */
+function OrderFocusView({
+  order, user, profile, orderBids, loadingBids, acceptingBid, acceptedPackers,
+  chatOrder, chatPackerId, showItemsModal,
+  onBack, onOpenItems, onCloseItems, onOpenChat, onCloseChat, onAcceptBid, onHirePacker
+}) {
+  return (
+    <div className="space-y-4">
+      {/* Breadcrumb + Header */}
+      <div className="flex items-center gap-4 mb-2">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Назад к панели
+        </button>
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{order.title}</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`px-3 py-1 rounded-md text-sm font-medium ${getStatusBadgeColor(order.status)}`}>
+                {order.status}
+              </span>
+              {order.items && order.items.length > 0 && (
+                <span className="px-3 py-1 rounded-md text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                  {order.items.length} items
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* View Items Button */}
+          {order.items && order.items.length > 0 && (
+            <button
+              onClick={onOpenItems}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Открыть таблицу товаров
+            </button>
+          )}
+        </div>
+
+        {/* Order Details */}
+        {order.description && (
+          <p className="text-slate-600 dark:text-slate-400 mb-4">{order.description}</p>
+        )}
+
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div>
+            <p className="text-slate-500 dark:text-slate-400">Бюджет</p>
+            <p className="font-semibold text-slate-900 dark:text-white">
+              {order.budget ? `$${parseFloat(order.budget).toFixed(2)}` : 'Не указан'}
+            </p>
+          </div>
+          <div>
+            <p className="text-slate-500 dark:text-slate-400">Дедлайн</p>
+            <p className="font-semibold text-slate-900 dark:text-white">{formatDate(order.deadline)}</p>
+          </div>
+          <div>
+            <p className="text-slate-500 dark:text-slate-400">Создан</p>
+            <p className="font-semibold text-slate-900 dark:text-white">{formatDate(order.created_at)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Bids Section (for searching status) */}
+      {order.status === 'searching' && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+            Предложения от упаковщиков ({orderBids[order.id]?.count || 0})
+          </h3>
+          
+          {loadingBids ? (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-600"></div>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Загрузка предложений...</p>
+            </div>
+          ) : !orderBids[order.id]?.bids || orderBids[order.id].bids.length === 0 ? (
+            <p className="text-center text-slate-500 dark:text-slate-400 py-8">
+              Предложений пока нет. Упаковщики увидят ваш заказ и скоро откликнутся.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {orderBids[order.id].bids.map((bid) => (
+                <div
+                  key={bid.id}
+                  className={`p-4 rounded-lg border ${
+                    bid.status === 'accepted' 
+                      ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' 
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-semibold flex-shrink-0">
+                        {(bid.profiles?.full_name || 'P')[0].toUpperCase()}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-900 dark:text-white">{bid.profiles?.full_name || 'Упаковщик'}</p>
+                        <div className="mt-2 flex items-center gap-4 text-sm">
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400 text-xs">Цена:</span>
+                            <p className="font-semibold text-slate-900 dark:text-white">${parseFloat(bid.price).toFixed(2)}</p>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 dark:text-slate-400 text-xs">Дней:</span>
+                            <p className="font-semibold text-slate-900 dark:text-white">{bid.days_to_complete} дн.</p>
+                          </div>
+                        </div>
+                        {bid.comment && (
+                          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 italic">"{bid.comment}"</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onOpenChat(bid.packer_id)}
+                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        Chat
+                      </button>
+
+                      {bid.status === 'pending' && (
+                        <button
+                          onClick={() => onAcceptBid(bid, order.id)}
+                          disabled={acceptingBid}
+                          className={`px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-md hover:bg-emerald-700 transition ${
+                            acceptingBid ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          Принять
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Chat Section (for booked orders) */}
+      {order.status === 'booked' && order.accepted_packer_id && (
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Чат с упаковщиком</h3>
+              {acceptedPackers[order.id] && (
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Назначен: <span className="font-medium">{acceptedPackers[order.id]}</span>
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => onOpenChat(order.accepted_packer_id)}
+              className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              Открыть чат
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Items Table Modal */}
+      {showItemsModal && order.items && order.items.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Товары заказа ({order.items.length})</h3>
+              <button
+                onClick={onCloseItems}
+                className="p-2 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 overflow-x-auto max-h-[calc(90vh-80px)]">
+              <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                <thead className="bg-slate-50 dark:bg-slate-900/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Артикул</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Название</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Штрихкод</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Особое</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Предподготовка</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Транспорт</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Кол-во</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                  {order.items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-900/30">
+                      <td className="px-3 py-2 text-xs font-medium text-slate-900 dark:text-white">{item.sku}</td>
+                      <td className="px-3 py-2 text-xs text-slate-700 dark:text-slate-300">{item.name}</td>
+                      <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">{item.barcode || '-'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">{item.special_notes || '-'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">{item.prep_work || '-'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-600 dark:text-slate-400">{item.transport_pack || '-'}</td>
+                      <td className="px-3 py-2 text-xs text-slate-900 dark:text-white text-right font-semibold">{item.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-50 dark:bg-slate-900/50">
+                  <tr>
+                    <td colSpan="6" className="px-3 py-2 text-xs font-semibold text-slate-900 dark:text-white text-right">Всего товаров:</td>
+                    <td className="px-3 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 text-right">
+                      {order.items.reduce((sum, item) => sum + (item.quantity || 0), 0)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chat Modal */}
+      {chatOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden relative">
+            <button
+              onClick={onCloseChat}
+              className="absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-white dark:bg-slate-800 rounded-full p-2 shadow-lg transition"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <OrderChat
+              order={chatOrder}
+              currentUser={user}
+              currentUserProfile={profile}
+              selectedPackerId={chatPackerId}
+              onHirePacker={onHirePacker}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

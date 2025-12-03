@@ -27,7 +27,7 @@ function Auth() {
       // Successful login
       navigate('/exchange');
     } catch (error) {
-      setError(error.message || 'Failed to sign in');
+      setError(error.message || 'Не удалось войти');
     } finally {
       setLoading(false);
     }
@@ -39,7 +39,7 @@ function Auth() {
     setError('');
 
     if (!fullName.trim()) {
-      setError('Full name is required');
+      setError('ФИО обязательно для заполнения');
       setLoading(false);
       return;
     }
@@ -58,12 +58,12 @@ function Auth() {
       if (error) throw error;
 
       // Show success message
-      alert('Registration successful! Please check your email to confirm your account.');
+      alert('Регистрация успешна! Проверьте вашу почту для подтверждения аккаунта.');
       setIsSignUp(false);
       setFullName('');
       setPassword('');
     } catch (error) {
-      setError(error.message || 'Failed to sign up');
+      setError(error.message || 'Не удалось зарегистрироваться');
     } finally {
       setLoading(false);
     }
@@ -75,10 +75,10 @@ function Auth() {
         {/* Logo or Title */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            {isSignUp ? 'Create Account' : 'Welcome Back'}
+            {isSignUp ? 'Создать аккаунт' : 'Добро пожаловать'}
           </h1>
           <p className="text-gray-500">
-            {isSignUp ? 'Sign up to get started' : 'Sign in to continue'}
+            {isSignUp ? 'Зарегистрируйтесь для начала' : 'Войдите чтобы продолжить'}
           </p>
         </div>
 
@@ -96,7 +96,7 @@ function Auth() {
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
-            Sign In
+            Вход
           </button>
           <button
             type="button"
@@ -110,7 +110,7 @@ function Auth() {
                 : 'text-gray-600 hover:text-gray-800'
             }`}
           >
-            Sign Up
+            Регистрация
           </button>
         </div>
 
@@ -127,14 +127,14 @@ function Auth() {
           {isSignUp && (
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
-                Full Name
+                ФИО
               </label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-                placeholder="Enter your full name"
+                placeholder="Введите ваше полное имя"
                 required={isSignUp}
               />
             </div>
@@ -150,7 +150,7 @@ function Auth() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-              placeholder="Enter your email"
+              placeholder="Введите ваш email"
               required
             />
           </div>
@@ -158,20 +158,20 @@ function Auth() {
           {/* Password */}
           <div className="mb-6">
             <label className="block text-gray-700 font-medium mb-2">
-              Password
+              Пароль
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
-              placeholder="Enter your password"
+              placeholder="Введите ваш пароль"
               required
               minLength={6}
             />
             {isSignUp && (
               <p className="text-xs text-gray-500 mt-1">
-                Password must be at least 6 characters
+                Пароль должен содержать минимум 6 символов
               </p>
             )}
           </div>
@@ -186,7 +186,7 @@ function Auth() {
                 : 'bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98]'
             }`}
           >
-            {loading ? 'Processing...' : isSignUp ? 'Sign Up' : 'Sign In'}
+            {loading ? 'Обработка...' : isSignUp ? 'Регистрация' : 'Войти'}
           </button>
         </form>
 
@@ -194,24 +194,24 @@ function Auth() {
         <div className="mt-6 text-center text-sm text-gray-600">
           {isSignUp ? (
             <p>
-              Already have an account?{' '}
+              Уже есть аккаунт?{' '}
               <button
                 type="button"
                 onClick={() => setIsSignUp(false)}
                 className="text-indigo-600 hover:text-indigo-700 font-medium"
               >
-                Sign In
+                Войти
               </button>
             </p>
           ) : (
             <p>
-              Don&apos;t have an account?{' '}
+              Нет аккаунта?{' '}
               <button
                 type="button"
                 onClick={() => setIsSignUp(true)}
                 className="text-indigo-600 hover:text-indigo-700 font-medium"
               >
-                Sign Up
+                Зарегистрироваться
               </button>
             </p>
           )}

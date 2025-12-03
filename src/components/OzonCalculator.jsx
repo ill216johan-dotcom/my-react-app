@@ -2,8 +2,36 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Lock, Unlock, X, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import CalculatorLayout from './CalculatorLayout';
+import { supabase } from '../../supabaseClient';
 
 const OzonCalculator = () => {
+  // --- AUTH STATE (Admin check) ---
+  const [userProfile, setUserProfile] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          setUserProfile(profile);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const isAdmin = userProfile?.role === 'admin';
+
   // --- STATE: THEME (detecting from document) ---
   const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
   
@@ -81,6 +109,14 @@ const OzonCalculator = () => {
   
   // Состояние: какие кластеры клиент использует СЕЙЧАС (для расчета "До")
   const [clientSelectedClusters, setClientSelectedClusters] = useState(['msk']);
+
+  // --- WMS PARAMETERS (Admin Only) ---
+  const [wmsParams, setWmsParams] = useState({
+    inventoryThreshold: 100,
+    reorderPoint: 50,
+    leadTime: 7,
+    safetyStock: 25
+  });
 
   // --- ВЫЧИСЛЕНИЯ ПАРТИИ ---
   const itemLiterage = (product.width * product.height * product.length) / 1000;
@@ -369,7 +405,7 @@ const OzonCalculator = () => {
     : (isDarkMode ? 'text-zinc-200' : 'text-slate-800');
 
   return (
-    <CalculatorLayout title="Ozon FBO Calculator">
+    <CalculatorLayout title="Калькулятор выгоды Ozon FBO">
       <div className={`${theme.bg} ${theme.text} transition-colors duration-200`}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           

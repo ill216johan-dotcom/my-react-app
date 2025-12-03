@@ -13,7 +13,7 @@ function AuthGuard({ children }) {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // Check current session
+    // Check current session and ban status
     const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -21,8 +21,28 @@ function AuthGuard({ children }) {
         if (error) {
           console.error('Error checking session:', error);
           setUser(null);
+        } else if (session?.user) {
+          // Check if user is banned
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('is_banned')
+            .eq('id', session.user.id)
+            .single();
+
+          if (profileError) {
+            console.error('Error checking profile:', profileError);
+          }
+
+          if (profile?.is_banned) {
+            // User is banned - force logout
+            alert('Ваш аккаунт был заблокирован. Обратитесь к администратору.');
+            await supabase.auth.signOut();
+            setUser(null);
+          } else {
+            setUser(session.user);
+          }
         } else {
-          setUser(session?.user || null);
+          setUser(null);
         }
       } catch (error) {
         console.error('Error in checkSession:', error);
@@ -35,8 +55,25 @@ function AuthGuard({ children }) {
     checkSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        // Check ban status on auth change
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('is_banned')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile?.is_banned) {
+          alert('Ваш аккаунт был заблокирован. Обратитесь к администратору.');
+          await supabase.auth.signOut();
+          setUser(null);
+        } else {
+          setUser(session.user);
+        }
+      } else {
+        setUser(null);
+      }
     });
 
     // Cleanup subscription on unmount

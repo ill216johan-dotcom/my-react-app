@@ -23,6 +23,7 @@ const AiChatWidget = () => {
     if (!input.trim()) return;
 
     const userMessage = { role: 'user', content: input };
+    const currentInput = input;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
@@ -33,21 +34,30 @@ const AiChatWidget = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          messages: [...messages, userMessage].map(m => ({role: m.role, content: m.content})) 
+          message: currentInput,
+          history: messages.map(m => ({ role: m.role, text: m.content }))
         })
       });
 
       const data = await response.json();
       
-      if (data.content) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
+      // Handle server errors (400, 500, etc.)
+      if (!response.ok) {
+        throw new Error(data.error || `Ошибка сервера: ${response.status}`);
+      }
+      
+      if (data.text) {
+        setMessages(prev => [...prev, { role: 'assistant', content: data.text }]);
       } else {
-         throw new Error('Пустой ответ');
+         throw new Error('Пустой ответ от сервера');
       }
 
     } catch (error) {
-      console.error(error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Не удалось связаться с сервером AI. Убедитесь, что запущен server.js (node server/server.js).' }]);
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `❌ **Ошибка**: ${error.message}\n\nУбедитесь, что сервер запущен: \`node server/server.js\`` 
+      }]);
     } finally {
       setIsLoading(false);
     }

@@ -18,6 +18,8 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
   const [sending, setSending] = useState(false);
   const [packerInfo, setPackerInfo] = useState(null);
   const [loadingPacker, setLoadingPacker] = useState(false);
+  const [logisticsCost, setLogisticsCost] = useState(order.logistics_cost || '');
+  const [savingLogistics, setSavingLogistics] = useState(false);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(null);
 
@@ -28,6 +30,7 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
   const isClient = currentUserProfile?.role === USER_ROLES.CLIENT;
   const isPacker = currentUserProfile?.role === USER_ROLES.PACKER;
   const isManager = currentUserProfile?.role === USER_ROLES.MANAGER || currentUserProfile?.role === USER_ROLES.ADMIN;
+  const isAdmin = currentUserProfile?.role === USER_ROLES.ADMIN;
 
   // Determine which packer we're chatting with
   const relevantPackerId = isSearchingStatus ? selectedPackerId : order.accepted_packer_id;
@@ -206,20 +209,20 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
 
       if (error) {
         console.error('Error sending message:', error);
-        alert('Failed to send message. Please try again.');
+        alert('Не удалось отправить сообщение. Попробуйте еще раз.');
       } else {
         setNewMessage('');
       }
     } catch (error) {
       console.error('Error in handleSendMessage:', error);
-      alert('An unexpected error occurred.');
+      alert('Произошла непредвиденная ошибка.');
     } finally {
       setSending(false);
     }
   };
 
   const handleCallArbitration = async () => {
-    if (!confirm('Call for arbitration? A manager will be summoned to resolve this dispute.')) {
+    if (!confirm('Позвать арбитраж? Менеджер будет вызван для разрешения этого спора.')) {
       return;
     }
 
@@ -232,7 +235,7 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
 
       if (orderError) {
         console.error('Error updating order:', orderError);
-        alert('Failed to call arbitration. Please try again.');
+        alert('Не удалось позвать арбитраж. Попробуйте еще раз.');
         return;
       }
 
@@ -241,7 +244,7 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
         order_id: order.id,
         sender_id: currentUser.id,
         relevant_packer_id: relevantPackerId || null,
-        content: 'Arbitration started. A Manager has been summoned. 🚨',
+        content: 'Арбитраж начат. Менеджер вызван. 🚨',
         is_system_message: true
       };
 
@@ -253,13 +256,13 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
         console.error('Error inserting system message:', messageError);
       }
 
-      alert('Arbitration has been called. A manager will review this case shortly.');
+      alert('Арбитраж вызван. Менеджер скоро рассмотрит этот случай.');
       
       // Refresh to show updated state
       window.location.reload();
     } catch (error) {
       console.error('Error in handleCallArbitration:', error);
-      alert('An unexpected error occurred.');
+      alert('Произошла непредвиденная ошибка.');
     }
   };
 
@@ -301,40 +304,71 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
     }
   };
 
+  const handleLogisticsCostUpdate = async () => {
+    if (!isManager && !isAdmin) return;
+
+    setSavingLogistics(true);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ logistics_cost: parseFloat(logisticsCost) || 0 })
+        .eq('id', order.id);
+
+      if (error) {
+        console.error('Error updating logistics cost:', error);
+        alert('Не удалось обновить стоимость логистики.');
+      } else {
+        alert('Стоимость логистики обновлена успешно!');
+      }
+    } catch (error) {
+      console.error('Error in handleLogisticsCostUpdate:', error);
+      alert('Произошла непредвиденная ошибка.');
+    } finally {
+      setSavingLogistics(false);
+    }
+  };
+
+  // Determine if manager/admin can send messages
+  const canSendMessage = () => {
+    if (isClient || isPacker) return true;
+    if (isManager && order.is_disputed) return true;
+    return false;
+  };
+
   if (!relevantPackerId && isSearchingStatus) {
     return (
       <div className="bg-slate-50 rounded-lg p-6 text-center">
         <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
-        <p className="text-slate-600">Select a bid to start chatting with that packer</p>
+        <p className="text-slate-600">Выберите заявку, чтобы начать общение с упаковщиком</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-[600px] bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+    <div className="flex flex-col h-auto bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
       {/* Chat Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-semibold text-slate-900">
               {isClient ? (
-                <>Chat with {loadingPacker ? '...' : (packerInfo?.full_name || 'Packer')}</>
+                <>Чат с {loadingPacker ? '...' : (packerInfo?.full_name || 'упаковщиком')}</>
               ) : isPacker ? (
-                <>Chat with Client</>
+                <>Чат с клиентом</>
               ) : (
-                <>Order Chat (Manager View)</>
+                <>Чат заказа (Вид менеджера)</>
               )}
             </h3>
             <p className="text-sm text-slate-500 mt-1 flex items-center">
-              <span>Order: {order.title}</span>
+              <span>Заказ: {order.title}</span>
               {order.is_disputed && (
                 <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-800 border border-red-200">
                   <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                   </svg>
-                  DISPUTED
+                  СПОР
                 </span>
               )}
             </p>
@@ -346,19 +380,78 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
               onClick={() => onHirePacker(relevantPackerId)}
               className="px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition shadow-sm text-sm"
             >
-              Hire This Packer
+              Нанять упаковщика
             </button>
+          )}
+        </div>
+
+        {/* Observer Mode Banner for Manager/Admin */}
+        {isManager && (
+          <div className={`mt-4 px-4 py-2 rounded-md border ${
+            order.is_disputed 
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+              </svg>
+              {order.is_disputed ? 'Режим арбитража активен' : 'Режим наблюдателя'}
+            </div>
+            <p className="text-xs mt-1 opacity-80">
+              {order.is_disputed 
+                ? 'Вы можете отправлять сообщения для разрешения спора'
+                : 'Вы можете только читать сообщения. Отправка доступна при активном споре.'}
+            </p>
+          </div>
+        )}
+
+        {/* Logistics Cost Section (Visible to all, editable by Manager/Admin) */}
+        <div className="mt-4 p-4 bg-slate-50 rounded-md border border-slate-200">
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Стоимость логистики фулфилмент короба
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              value={logisticsCost}
+              onChange={(e) => setLogisticsCost(e.target.value)}
+              disabled={!isManager && !isAdmin}
+              className={`flex-1 px-3 py-2 text-sm border rounded-md transition ${
+                isManager || isAdmin
+                  ? 'bg-white border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'
+                  : 'bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed'
+              }`}
+              placeholder="Введите стоимость"
+            />
+            {(isManager || isAdmin) && (
+              <button
+                onClick={handleLogisticsCostUpdate}
+                disabled={savingLogistics}
+                className={`px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 transition shadow-sm ${
+                  savingLogistics ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                {savingLogistics ? 'Сохранение...' : 'Сохранить'}
+              </button>
+            )}
+          </div>
+          {!isManager && !isAdmin && (
+            <p className="text-xs text-slate-500 mt-1">
+              Только менеджер или администратор может изменить это значение
+            </p>
           )}
         </div>
       </div>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
+      <div className="h-[400px] overflow-y-auto p-6 space-y-4 bg-slate-50">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-600"></div>
-              <p className="mt-2 text-slate-600">Loading messages...</p>
+              <p className="mt-2 text-slate-600">Загрузка сообщений...</p>
             </div>
           </div>
         ) : messages.length === 0 ? (
@@ -367,8 +460,8 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
               <svg className="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-              <p className="text-slate-600">No messages yet</p>
-              <p className="text-sm text-slate-500 mt-1">Start the conversation!</p>
+              <p className="text-slate-600">Сообщений пока нет</p>
+              <p className="text-sm text-slate-500 mt-1">Начните разговор!</p>
             </div>
           </div>
         ) : (
@@ -402,9 +495,9 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
                     >
                       {!isMyMessage && (
                         <p className="text-xs font-semibold mb-1 opacity-75">
-                          {message.sender?.full_name || 'Unknown'}
-                          {message.sender?.role === USER_ROLES.MANAGER && ' (Manager)'}
-                          {message.sender?.role === USER_ROLES.ADMIN && ' (Admin)'}
+                          {message.sender?.full_name || 'Неизвестный'}
+                          {message.sender?.role === USER_ROLES.MANAGER && ' (Менеджер)'}
+                          {message.sender?.role === USER_ROLES.ADMIN && ' (Админ)'}
                         </p>
                       )}
                       <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
@@ -424,7 +517,7 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
       {/* Input Area */}
       <div className="border-t border-slate-200 bg-white px-6 py-4">
         {/* Arbitration Button */}
-        {shouldShowArbitrationButton() && !order.is_disputed && (
+        {shouldShowArbitrationButton() && !order.is_disputed && !isManager && (
           <div className="mb-4">
             <button
               onClick={handleCallArbitration}
@@ -433,43 +526,52 @@ function OrderChat({ order, currentUser, currentUserProfile, selectedPackerId = 
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
               </svg>
-              Call Arbitration (Позвать Арбитраж)
+              Позвать арбитраж
             </button>
           </div>
         )}
 
-        {/* Message Input Form */}
-        <form onSubmit={handleSendMessage} className="flex gap-3">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type your message..."
-            disabled={sending}
-            className="flex-1 px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900"
-          />
-          <button
-            type="submit"
-            disabled={sending || !newMessage.trim()}
-            className={`px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition shadow-sm flex items-center gap-2 text-sm ${
-              sending || !newMessage.trim() ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {sending ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
-                Sending...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
-                Send
-              </>
-            )}
-          </button>
-        </form>
+        {/* Message Input Form - Only show if user can send messages */}
+        {canSendMessage() ? (
+          <form onSubmit={handleSendMessage} className="flex gap-3">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="Введите сообщение..."
+              disabled={sending}
+              className="flex-1 px-4 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition text-slate-900"
+            />
+            <button
+              type="submit"
+              disabled={sending || !newMessage.trim()}
+              className={`px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition shadow-sm flex items-center gap-2 text-sm ${
+                sending || !newMessage.trim() ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {sending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></div>
+                  Отправка...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                  </svg>
+                  Отправить
+                </>
+              )}
+            </button>
+          </form>
+        ) : (
+          <div className="text-center py-2 text-sm text-slate-500 bg-slate-50 rounded-md border border-slate-200">
+            <svg className="w-5 h-5 mx-auto mb-1 text-slate-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+            </svg>
+            Отправка сообщений отключена (режим наблюдателя)
+          </div>
+        )}
       </div>
     </div>
   );

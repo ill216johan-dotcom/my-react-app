@@ -2,8 +2,36 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, RefreshCw, X, Lock, Unlock, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import CalculatorLayout from './CalculatorLayout';
+import { supabase } from '../../supabaseClient';
 
 const FboCalculator = () => {
+  // --- AUTH STATE (Admin check) ---
+  const [userProfile, setUserProfile] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          setUserProfile(profile);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const isAdmin = userProfile?.role === 'admin';
+
   // --- THEME STATE (detecting from document) ---
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
   
@@ -94,6 +122,14 @@ const FboCalculator = () => {
   
   const [anchorMode, setAnchorMode] = useState('items');
   const [whSearch, setWhSearch] = useState('');
+
+  // --- WMS PARAMETERS (Admin Only) ---
+  const [wmsParams, setWmsParams] = useState({
+    inventoryThreshold: 100,
+    reorderPoint: 50,
+    leadTime: 7,
+    safetyStock: 25
+  });
 
   // --- 4. СКЛАДЫ ---
   const initialWarehouses = [
@@ -408,7 +444,7 @@ const FboCalculator = () => {
   ];
 
   return (
-    <CalculatorLayout title="Wildberries FBO Calculator">
+    <CalculatorLayout title="Калькулятор выгоды Wildberries FBO">
       <div className={`transition-colors duration-200 ${t.mainBg} ${t.mainText}`}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
@@ -609,6 +645,41 @@ const FboCalculator = () => {
                     </div>
                 </details>
             </div>
+
+            {/* 5. WMS Parameters (Admin Only) */}
+            {isAdmin && (
+              <div className={`${t.cardBg} p-4 rounded-xl shadow-sm border-2 ${isDark ? 'border-amber-600 bg-amber-900/20' : 'border-amber-400 bg-amber-50'}`}>
+                <h3 className="font-bold text-sm mb-3 flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                  <Settings size={16} /> WMS Параметры (Только Админ)
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { key: 'inventoryThreshold', label: 'Порог запасов' },
+                    { key: 'reorderPoint', label: 'Точка перезаказа' },
+                    { key: 'leadTime', label: 'Время поставки (дн)' },
+                    { key: 'safetyStock', label: 'Страховой запас' }
+                  ].map(({ key, label }) => (
+                    <div key={key}>
+                      <label className={`text-xs mb-1 block font-medium ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>
+                        {label}
+                      </label>
+                      <input
+                        type="number"
+                        value={wmsParams[key]}
+                        onChange={(e) => setWmsParams({...wmsParams, [key]: Number(e.target.value)})}
+                        className={`w-full p-2 border rounded-lg outline-none text-sm ${isDark ? 'bg-amber-950 text-amber-200 border-amber-700' : 'bg-white text-amber-900 border-amber-400'} focus:ring-2 focus:ring-amber-500`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className={`mt-3 text-xs px-3 py-2 rounded ${isDark ? 'bg-amber-950/50 text-amber-300' : 'bg-amber-100 text-amber-800'}`}>
+                  <svg className="inline w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Эти параметры управляют WMS логикой и видны только администраторам
+                </div>
+              </div>
+            )}
 
           </div>
 

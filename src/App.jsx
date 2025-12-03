@@ -89,12 +89,12 @@ function App() {
 
   // Показываем "Загрузка...", пока данные не пришли
   if (loading) {
-      return <div className="p-10 text-center text-gray-500">Загрузка базы данных...</div>;
+      return <div className="p-10 text-center text-gray-500">Загрузка данных...</div>;
   }
 
   // Если данных нет и загрузка прошла (ошибка), чтобы сайт не упал
   if (!data) {
-      return <div className="p-10 text-center text-red-500">Ошибка: Данные не найдены. Проверьте файл public/knowledgeBase.json</div>;
+      return <div className="p-10 text-center text-red-500">Ошибка: Данные не найдены. Проверьте файл public/knowledgebase.json</div>;
   }
 
   return (
