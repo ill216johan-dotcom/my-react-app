@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient.js';
-import { USER_ROLES } from '../db_schema';
+import { USER_ROLES } from '../db_schema.js';
 
 /**
  * OrderChat Component

@@ -3,7 +3,7 @@ import {
   Settings, Plus, Save, Copy, Trash2, Box, Check, 
   ChevronDown, Package, X 
 } from 'lucide-react';
-import CalculatorLayout from './CalculatorLayout';
+import CalculatorLayout from './CalculatorLayout.jsx';
 
 // --- КОНФИГУРАЦИЯ ПО УМОЛЧАНИЮ (Коэффициенты) ---
 const DEFAULT_SETTINGS = {

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import AiChatWidget from './components/AiChatWidget';
-import HelpCenter from './components/HelpCenter';
-import FboCalculator from './components/FboCalculator';
-import OzonCalculator from './components/OzonCalculator';
-import PackagingCalculator from './components/PackagingCalculator';
-import AdminPanel from './components/AdminPanel';
-import Auth from './pages/Auth';
-import Exchange from './pages/Exchange';
-import AdminImages from './pages/AdminImages';
-import AuthGuard from './components/AuthGuard';
+import AiChatWidget from './components/AiChatWidget.jsx';
+import HelpCenter from './components/HelpCenter.jsx';
+import FboCalculator from './components/FboCalculator.jsx';
+import OzonCalculator from './components/OzonCalculator.jsx';
+import PackagingCalculator from './components/PackagingCalculator.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
+import Auth from './pages/Auth.jsx';
+import Exchange from './pages/Exchange.jsx';
+import AdminImages from './pages/AdminImages.jsx';
+import AuthGuard from './components/AuthGuard.jsx';
 
 // МЫ УДАЛИЛИ ИМПОРТ rawData, чтобы облегчить сборку!
 

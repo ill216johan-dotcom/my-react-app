@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import AiChatWidget from '../components/AiChatWidget';
-import HelpCenter from '../components/HelpCenter';
-import FboCalculator from '../components/FboCalculator';
-import OzonCalculator from '../components/OzonCalculator';
-import PackagingCalculator from '../components/PackagingCalculator';
-import AdminPanel from '../components/AdminPanel';
+import AiChatWidget from '../components/AiChatWidget.jsx';
+import HelpCenter from '../components/HelpCenter.jsx';
+import FboCalculator from '../components/FboCalculator.jsx';
+import OzonCalculator from '../components/OzonCalculator.jsx';
+import PackagingCalculator from '../components/PackagingCalculator.jsx';
+import AdminPanel from '../components/AdminPanel.jsx';
 
 function Home() {
   // Функция обработки данных (оставили как была)

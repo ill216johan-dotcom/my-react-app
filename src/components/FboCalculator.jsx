@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, RefreshCw, X, Lock, Unlock, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import CalculatorLayout from './CalculatorLayout';
+import CalculatorLayout from './CalculatorLayout.jsx';
 import { supabase } from '../supabaseClient.js';
 
 const FboCalculator = () => {

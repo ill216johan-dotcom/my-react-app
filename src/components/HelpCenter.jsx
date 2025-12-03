@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Menu, ChevronRight, ChevronDown, ThumbsUp, ThumbsDown, Calculator, Home, Folder, Sun, Moon, List, XCircle, Package, Box } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import CalculatorLayout from './CalculatorLayout';
+import CalculatorLayout from './CalculatorLayout.jsx';
 
 // Вспомогательный компонент для подсветки текста
 const HighlightText = React.memo(({ text = '', highlight = '' }) => {

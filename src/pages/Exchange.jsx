@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient.js';
-import { ORDER_STATUSES, USER_ROLES } from '../db_schema';
+import { ORDER_STATUSES, USER_ROLES } from '../db_schema.js';
 import * as XLSX from 'xlsx';
-import OrderChat from '../components/OrderChat';
-import CalculatorLayout from '../components/CalculatorLayout';
+import OrderChat from '../components/OrderChat.jsx';
+import CalculatorLayout from '../components/CalculatorLayout.jsx';
 
 /**
  * Helper Functions - Shared across all dashboard components
