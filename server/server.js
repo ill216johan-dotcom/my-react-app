@@ -16,6 +16,7 @@ app.use(express.json());
 // --- НАСТРОЙКИ ---
 
 // Supabase
+// Используем VITE_ префикс для совместимости с .env файлом (в dev режиме)
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.VITE_SUPABASE_ANON_KEY
@@ -40,7 +41,8 @@ async function getQueryEmbedding(text) {
       modelUri: `emb://${FOLDER_ID}/text-search-query/latest`, // Модель специально для ЗАПРОСОВ
       text: text
     }, {
-      headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` }
+      headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` },
+      timeout: 15000 // 15 секунд таймаут
     });
     return response.data.embedding;
   } catch (e) {
@@ -54,11 +56,18 @@ async function generateYandexResponse(messages, context) {
   const url = 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion';
   
   // Системная инструкция для ИИ
-  const systemText = `Ты — умный и вежливый ассистент сервиса фулфилмента и упаковки.
-Твоя задача — отвечать на вопросы клиентов максимально точно.
-Используй ДЛЯ ОТВЕТА ТОЛЬКО информацию из блока "КОНТЕКСТ ЗНАНИЙ" ниже.
-Не придумывай цены и правила, которых нет в контексте.
-Если информации нет в контексте, скажи: "К сожалению, в моей базе нет точной информации по этому вопросу. Пожалуйста, свяжитесь с менеджером."
+  const systemText = `Ты — умный ассистент сервиса фулфилмента.
+Твоя задача — отвечать на вопросы, используя ТОЛЬКО предоставленный "КОНТЕКСТ ЗНАНИЙ".
+
+ИНСТРУКЦИЯ ПО КАРТИНКАМ (КРИТИЧНО ВАЖНО):
+1. Ты работаешь в веб-интерфейсе, который УМЕЕТ отображать Markdown-картинки.
+2. Если в "КОНТЕКСТЕ ЗНАНИЙ" встречается код картинки вида ![описание](ссылка) — ТЫ ОБЯЗАН ВСТАВИТЬ ЕГО В ОТВЕТ.
+3. ЗАПРЕЩЕНО писать фразы вроде "я текстовый ИИ", "я не могу показать фото". Вместо этого просто молча вставь код картинки.
+4. Если пользователь просит показать, куда нажать, или как выглядит документ — найди картинку в контексте и верни её.
+
+ИНСТРУКЦИЯ ПО ССЫЛКАМ:
+1. Всегда форматируй ссылки как [Текст](адрес).
+2. Используй ссылки из контекста смело.
 
 КОНТЕКСТ ЗНАНИЙ:
 ${context}`;
@@ -82,7 +91,8 @@ ${context}`;
       },
       messages: yandexMessages
     }, {
-      headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` }
+      headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` },
+      timeout: 30000 // 30 секунд таймаут для генерации
     });
 
     return response.data.result.alternatives[0].message.text;

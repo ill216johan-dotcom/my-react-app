@@ -1,40 +1,47 @@
 import fs from 'fs';
 import path from 'path';
-import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+// --- ХАРДКОД НАСТРОЕК (ЧТОБЫ НАВЕРНЯКА) ---
 
-// Настройки
-const CHUNK_SIZE = 800; // Размер кусочка текста (символов). 800 - оптимально для поиска.
+// 1. Вставь сюда данные Supabase (из файла .env)
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+
+// 2. Данные Yandex (я их уже вставил из твоих сообщений)
 const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
-const FOLDER_ID = process.env.YANDEX_FOLDER_ID;
+const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID;
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-);
+const CHUNK_SIZE = 800;
+const KNOWLEDGE_DIR = './knowledge';
 
-// Функция нарезки текста (Chunking)
+// --- ПРОВЕРКА ---
+if (SUPABASE_URL.includes('ВСТАВЬ')) {
+    console.error("❌ ОШИБКА: Ты забыл вставить ключи Supabase в код скрипта (строки 10-11)!");
+    process.exit(1);
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// --- ДАЛЬШЕ ВСЁ КАК ОБЫЧНО ---
+
+// Получаем путь к скрипту
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 function splitText(text, maxLength) {
   const chunks = [];
-  // 1. Сначала бьем по параграфам (двойной перенос строки)
   let paragraphs = text.split(/\n\s*\n/);
-  
   let currentChunk = "";
 
   for (let para of paragraphs) {
-    // Очищаем от лишних пробелов
     para = para.trim();
     if (!para) continue;
 
-    // Если параграф гигантский (больше лимита), режем его грубо по предложениям
     if (para.length > maxLength) {
-        // Если в буфере что-то было, сохраняем
         if (currentChunk) { chunks.push(currentChunk); currentChunk = ""; }
-        
-        // Режем гиганта
         const sentences = para.match(/[^.!?]+[.!?]+(\s|$)/g) || [para];
         let tempChunk = "";
         for (let sent of sentences) {
@@ -49,7 +56,6 @@ function splitText(text, maxLength) {
         continue;
     }
 
-    // Обычная логика: собираем параграфы, пока влезает
     if ((currentChunk.length + para.length) < maxLength) {
       currentChunk += (currentChunk ? "\n\n" : "") + para;
     } else {
@@ -62,17 +68,17 @@ function splitText(text, maxLength) {
   return chunks;
 }
 
-// Получение вектора от Яндекса
 async function getYandexEmbedding(text) {
-  // Искуственная задержка, чтобы Яндекс не забанил за спам запросами
+  // Искуственная задержка
   await new Promise(resolve => setTimeout(resolve, 200)); 
   
   try {
     const response = await axios.post('https://llm.api.cloud.yandex.net/foundationModels/v1/textEmbedding', {
-        modelUri: `emb://${FOLDER_ID}/text-search-doc/latest`,
+        modelUri: `emb://${YANDEX_FOLDER_ID}/text-search-doc/latest`,
         text: text
     }, {
-        headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` }
+        headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` },
+        timeout: 20000 // 20 секунд таймаут
     });
     return response.data.embedding;
   } catch (e) {
@@ -82,10 +88,10 @@ async function getYandexEmbedding(text) {
 }
 
 async function processFile() {
-  const filePath = './knowledge/full_dump.txt';
+  const filePath = path.join('knowledge', 'full_dump.txt');
   
   if (!fs.existsSync(filePath)) {
-    console.log("❌ Файл knowledge/full_dump.txt не найден! Создай его и положи туда весь текст.");
+    console.log(`❌ Файл ${filePath} не найден!`);
     return;
   }
 
@@ -99,7 +105,6 @@ async function processFile() {
   let i = 0;
   for (const chunk of chunks) {
     i++;
-    // Делаем заголовок из первых слов фрагмента
     const shortTitle = chunk.substring(0, 40).replace(/\n/g, " ") + "...";
     
     try {
@@ -114,7 +119,7 @@ async function processFile() {
       if (error) throw error;
       console.log(`✅ [${i}/${chunks.length}] Загружено: ${shortTitle}`);
     } catch (err) {
-      console.error(`❌ Ошибка на фрагменте #${i}`);
+      console.error(`❌ Ошибка на фрагменте #${i}:`, err.message);
     }
   }
 
