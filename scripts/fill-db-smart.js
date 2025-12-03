@@ -1,0 +1,149 @@
+import fs from 'fs';
+import path from 'path';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+import axios from 'axios';
+import { fileURLToPath } from 'url';
+
+// --- МАГИЯ ПУТЕЙ ---
+// Получаем путь к текущей папке (scripts)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Явно указываем путь к .env файлу (он на уровень выше, в корне)
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+// --- ОТЛАДКА (ПРОВЕРКА) ---
+console.log("-----------------------------------");
+if (!process.env.VITE_SUPABASE_URL) {
+    console.error("❌ ОШИБКА: Не вижу VITE_SUPABASE_URL. Проверь файл .env!");
+    process.exit(1);
+} else {
+    console.log("✅ Supabase URL найден");
+}
+if (!process.env.YANDEX_API_KEY) {
+    console.error("❌ ОШИБКА: Не вижу YANDEX_API_KEY. Проверь файл .env!");
+    process.exit(1);
+} else {
+    console.log("✅ Yandex Key найден");
+}
+console.log("-----------------------------------");
+
+// --- НАСТРОЙКИ ---
+const CHUNK_SIZE = 800;
+const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
+const FOLDER_ID = process.env.YANDEX_FOLDER_ID;
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
+
+// ... Дальше твой старый код (function splitText и т.д.) ...
+
+// Функция нарезки текста (Chunking)
+function splitText(text, maxLength) {
+  const chunks = [];
+  // 1. Сначала бьем по параграфам (двойной перенос строки)
+  let paragraphs = text.split(/\n\s*\n/);
+  
+  let currentChunk = "";
+
+  for (let para of paragraphs) {
+    // Очищаем от лишних пробелов
+    para = para.trim();
+    if (!para) continue;
+
+    // Если параграф гигантский (больше лимита), режем его грубо по предложениям
+    if (para.length > maxLength) {
+        // Если в буфере что-то было, сохраняем
+        if (currentChunk) { chunks.push(currentChunk); currentChunk = ""; }
+        
+        // Режем гиганта
+        const sentences = para.match(/[^.!?]+[.!?]+(\s|$)/g) || [para];
+        let tempChunk = "";
+        for (let sent of sentences) {
+            if ((tempChunk.length + sent.length) > maxLength) {
+                chunks.push(tempChunk);
+                tempChunk = sent;
+            } else {
+                tempChunk += sent;
+            }
+        }
+        if (tempChunk) chunks.push(tempChunk);
+        continue;
+    }
+
+    // Обычная логика: собираем параграфы, пока влезает
+    if ((currentChunk.length + para.length) < maxLength) {
+      currentChunk += (currentChunk ? "\n\n" : "") + para;
+    } else {
+      chunks.push(currentChunk);
+      currentChunk = para;
+    }
+  }
+  
+  if (currentChunk) chunks.push(currentChunk);
+  return chunks;
+}
+
+// Получение вектора от Яндекса
+async function getYandexEmbedding(text) {
+  // Искуственная задержка, чтобы Яндекс не забанил за спам запросами
+  await new Promise(resolve => setTimeout(resolve, 200)); 
+  
+  try {
+    const response = await axios.post('https://llm.api.cloud.yandex.net/foundationModels/v1/textEmbedding', {
+        modelUri: `emb://${FOLDER_ID}/text-search-doc/latest`,
+        text: text
+    }, {
+        headers: { 'Authorization': `Api-Key ${YANDEX_API_KEY}` }
+    });
+    return response.data.embedding;
+  } catch (e) {
+    console.error("Ошибка API Яндекса:", e.response?.data || e.message);
+    throw e;
+  }
+}
+
+async function processFile() {
+  const filePath = './knowledge/full_dump.txt';
+  
+  if (!fs.existsSync(filePath)) {
+    console.log("❌ Файл knowledge/full_dump.txt не найден! Создай его и положи туда весь текст.");
+    return;
+  }
+
+  console.log("📖 Читаю большой файл...");
+  const fullText = fs.readFileSync(filePath, 'utf-8');
+  
+  console.log("🔪 Нарезаю на кусочки...");
+  const chunks = splitText(fullText, CHUNK_SIZE);
+  console.log(`🧩 Получилось ${chunks.length} фрагментов. Начинаем загрузку...`);
+
+  let i = 0;
+  for (const chunk of chunks) {
+    i++;
+    // Делаем заголовок из первых слов фрагмента
+    const shortTitle = chunk.substring(0, 40).replace(/\n/g, " ") + "...";
+    
+    try {
+      const embedding = await getYandexEmbedding(chunk);
+
+      const { error } = await supabase.from('documents').insert({
+        content: chunk,
+        metadata: { title: `Фрагмент #${i}`, snippet: shortTitle },
+        embedding: embedding
+      });
+
+      if (error) throw error;
+      console.log(`✅ [${i}/${chunks.length}] Загружено: ${shortTitle}`);
+    } catch (err) {
+      console.error(`❌ Ошибка на фрагменте #${i}`);
+    }
+  }
+
+  console.log("🏁 Вся база знаний успешно загружена!");
+}
+
+processFile();
