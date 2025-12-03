@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 import { ORDER_STATUSES, USER_ROLES } from '../db_schema';
 import * as XLSX from 'xlsx';
 import OrderChat from '../components/OrderChat';

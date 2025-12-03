@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Lock, Unlock, X, ShieldAlert, ShieldCheck, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import CalculatorLayout from './CalculatorLayout';
-import { supabase } from '../../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 
 const OzonCalculator = () => {
   // --- AUTH STATE (Admin check) ---

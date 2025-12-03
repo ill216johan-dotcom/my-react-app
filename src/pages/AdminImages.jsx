@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, Save, CheckCircle, AlertCircle, Image as ImageIcon } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 
 /**
  * AdminImages Component

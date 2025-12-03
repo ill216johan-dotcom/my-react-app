@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Sun, Moon, User, LogOut, LogIn, Home } from 'lucide-react';
-import { supabase } from '../../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 
 const CalculatorLayout = ({ children, title }) => {
   const location = useLocation();
