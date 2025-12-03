@@ -13,8 +13,8 @@ const AiChatWidget = () => {
 
   // Dynamic API URL based on environment
   const API_URL = import.meta.env.PROD
-    ? '/api/chat'                       // Production (Vercel Serverless)
-    : 'http://localhost:3001/api/chat'; // Development (Local Node Server)
+  ? '/api/chat'                       // Production (Vercel Serverless)
+  : 'http://localhost:3001/api/chat'; // Development (Local Node Server)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
