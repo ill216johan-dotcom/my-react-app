@@ -11,6 +11,11 @@ const AiChatWidget = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
+  // Dynamic API URL based on environment
+  const API_URL = import.meta.env.PROD
+    ? '/api/chat'                       // Production (Vercel Serverless)
+    : 'http://localhost:3001/api/chat'; // Development (Local Node Server)
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -29,8 +34,7 @@ const AiChatWidget = () => {
     setIsLoading(true);
 
     try {
-      // Подключаемся к локальному серверу
-      const response = await fetch('http://localhost:3001/api/chat', {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
