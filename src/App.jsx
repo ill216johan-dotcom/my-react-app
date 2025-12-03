@@ -6,6 +6,9 @@ import FboCalculator from './components/FboCalculator';
 import OzonCalculator from './components/OzonCalculator';
 import PackagingCalculator from './components/PackagingCalculator';
 import AdminPanel from './components/AdminPanel';
+import Auth from './pages/Auth';
+import Exchange from './pages/Exchange';
+import AuthGuard from './components/AuthGuard';
 
 // МЫ УДАЛИЛИ ИМПОРТ rawData, чтобы облегчить сборку!
 
@@ -103,6 +106,15 @@ function App() {
             <Route path="/ozon-calculator" element={<OzonCalculator />} />
             <Route path="/packaging-calculator" element={<PackagingCalculator />} />
             <Route path="/admin" element={<AdminPanel data={data} onSave={handleDataUpdate} />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route 
+              path="/exchange" 
+              element={
+                <AuthGuard>
+                  <Exchange />
+                </AuthGuard>
+              } 
+            />
           </Routes>
           
           <button onClick={hardReset} className="fixed bottom-2 left-2 text-[10px] text-slate-400 hover:text-red-600 font-bold z-50 bg-white/80 px-2 py-1 rounded shadow border">

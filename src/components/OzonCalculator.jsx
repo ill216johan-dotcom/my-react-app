@@ -1,10 +1,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Moon, Sun, Lock, Unlock, X, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Lock, Unlock, X, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import CalculatorLayout from './CalculatorLayout';
 
 const OzonCalculator = () => {
-  // --- STATE: THEME ---
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  // --- STATE: THEME (detecting from document) ---
+  const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
+  
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // --- 1. ПАРАМЕТРЫ ТОВАРА ---
   const [product, setProduct] = useState({
@@ -360,28 +369,8 @@ const OzonCalculator = () => {
     : (isDarkMode ? 'text-zinc-200' : 'text-slate-800');
 
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-    <div className={`p-4 ${theme.bg} min-h-screen font-sans ${theme.text} transition-colors duration-200`}>
-      <div className="max-w-7xl mx-auto">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-          <div>
-            <h1 className={`text-2xl font-bold ${theme.primary} flex items-center gap-2`}>
-                <Truck className="fill-yellow-400 text-blue-700 dark:text-blue-500" /> Калькулятор выгоды Ozon FBO
-            </h1>
-            <p className={`text-sm ${theme.secondary}`}>Учитываем СВД (Среднее Время Доставки) и штрафы</p>
-          </div>
-          <div className="flex gap-2">
-             <button onClick={() => setIsDarkMode(!isDarkMode)} className={`bg-white dark:bg-zinc-900 px-3 py-2 rounded-lg text-sm font-medium border ${theme.card} hover:bg-slate-50 dark:hover:bg-zinc-800 ${theme.secondary} transition-colors`}>
-                {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
-             </button>
-             <button onClick={() => {setClusters(initialClusters); setManualTotalItems(null); setManualLiterage(null); setManualUnitsPerBox(null); setRiskMode('normal');}} className={`bg-white dark:bg-zinc-900 px-4 py-2 rounded-lg text-sm font-medium border ${theme.card} hover:bg-slate-50 dark:hover:bg-zinc-800 ${theme.secondary} flex items-center gap-2 transition-colors`}>
-                <RotateCcw size={16} /> Сброс
-             </button>
-          </div>
-        </div>
-
+    <CalculatorLayout title="Ozon FBO Calculator">
+      <div className={`${theme.bg} ${theme.text} transition-colors duration-200`}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* LEFT COLUMN */}
@@ -832,8 +821,7 @@ const OzonCalculator = () => {
           </div>
         </div>
       </div>
-    </div>
-    </div>
+    </CalculatorLayout>
   );
 };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Menu, ChevronRight, ChevronDown, ThumbsUp, ThumbsDown, Calculator, Home, Folder, Sun, Moon, List, XCircle, Package } from 'lucide-react';
+import { Search, Menu, ChevronRight, ChevronDown, ThumbsUp, ThumbsDown, Calculator, Home, Folder, Sun, Moon, List, XCircle, Package, User, LogOut, LogIn, Box } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../../supabaseClient';
 
 // Вспомогательный компонент для подсветки текста
 const HighlightText = React.memo(({ text = '', highlight = '' }) => {
@@ -38,7 +39,64 @@ const HelpCenter = ({ data }) => {
       return saved === 'dark'; 
   });
 
+  // Auth state
+  const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const categories = useMemo(() => data?.categories || [], [data]);
+
+  // Check auth status and listen for changes
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user || null);
+        
+        if (session?.user) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          setProfile(profileData);
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setUser(session?.user || null);
+      
+      if (session?.user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setProfile(profileData);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   // --- СИНХРОНИЗАЦИЯ С URL ---
   useEffect(() => {
@@ -208,7 +266,7 @@ const HelpCenter = ({ data }) => {
   };
 
   return (
-    <div className={`min-h-screen font-sans flex flex-col md:flex-row transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-neutral-300' : 'bg-white text-slate-900'}`}>
+    <div className={`min-h-screen font-sans flex flex-col transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-neutral-300' : 'bg-slate-50 text-slate-900'}`}>
       
       {showNoResultsToast && (
           <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-2 fade-in">
@@ -219,81 +277,224 @@ const HelpCenter = ({ data }) => {
           </div>
       )}
 
-      {/* MOBILE HEADER */}
-      <div className="md:hidden border-b p-4 flex justify-between items-center sticky top-0 z-50 bg-white dark:bg-black border-slate-200 dark:border-neutral-800">
-         <div className="flex items-center">
-            <img src="/logo-light.svg" alt="FF Help Center" className="h-8 w-auto block dark:hidden object-contain" />
-            <img src="/logo-dark.svg" alt="FF Help Center" className="h-8 w-auto hidden dark:block object-contain" />
-         </div>
-         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-2 bg-slate-100 dark:bg-neutral-900 rounded text-slate-600 dark:text-neutral-400">
-            <Menu size={20}/>
-         </button>
-      </div>
+      {/* COMPACT TOP NAVIGATION */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-black border-b border-slate-200 dark:border-neutral-800 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Left: Logo + Navigation */}
+            <div className="flex items-center gap-8">
+              {/* Logo */}
+              <Link to="/" className="flex-shrink-0">
+                <img 
+                  src="/logo-light.svg" 
+                  alt="FF Portal" 
+                  className="h-8 w-auto block dark:hidden object-contain" 
+                />
+                <img 
+                  src="/logo-dark.svg" 
+                  alt="FF Portal" 
+                  className="h-8 w-auto hidden dark:block object-contain" 
+                />
+              </Link>
 
-      {/* SIDEBAR */}
-      <aside className={`fixed inset-0 z-40 w-full md:w-80 md:static md:block border-r transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} bg-[#F9FAFB] dark:bg-black border-slate-200 dark:border-white/10`}>
-         <div className="h-full overflow-y-auto custom-scrollbar flex flex-col">
-            <div className="p-5 sticky top-0 z-10 bg-[#F9FAFB] dark:bg-black transition-colors duration-300">
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center">
-                        <img src="/logo-light.svg" alt="FF Help Center" className="h-10 w-auto block dark:hidden object-contain" />
-                        <img src="/logo-dark.svg" alt="FF Help Center" className="h-10 w-auto hidden dark:block object-contain" />
+              {/* Navigation Links - Desktop */}
+              <nav className="hidden md:flex items-center gap-1">
+                <Link
+                  to="/"
+                  className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+                >
+                  Knowledge Base
+                </Link>
+                <Link
+                  to="/calculator"
+                  className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+                >
+                  FBO Calculator
+                </Link>
+                <Link
+                  to="/ozon-calculator"
+                  className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+                >
+                  Ozon Calculator
+                </Link>
+                <Link
+                  to="/packaging-calculator"
+                  className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+                >
+                  Packaging
+                </Link>
+                <Link
+                  to="/exchange"
+                  className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+                >
+                  Exchange
+                </Link>
+              </nav>
+
+              {/* Mobile Menu Button */}
+              <button 
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
+                className="md:hidden p-2 rounded-md text-slate-600 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-800"
+              >
+                <Menu size={20}/>
+              </button>
+            </div>
+
+            {/* Right: User Actions */}
+            <div className="flex items-center gap-2">
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="p-2 rounded-md text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800 transition-colors"
+                title={isDarkMode ? 'Light Mode' : 'Dark Mode'}
+              >
+                {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+
+              {/* User Status */}
+              {authLoading ? (
+                <div className="w-9 h-9 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-indigo-600"></div>
+                </div>
+              ) : user ? (
+                <div className="flex items-center gap-2">
+                  {/* User Profile Badge - Desktop */}
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 dark:bg-neutral-900 rounded-md border border-slate-200 dark:border-neutral-800">
+                    <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center flex-shrink-0">
+                      <User size={14} className="text-indigo-600 dark:text-indigo-400" />
                     </div>
-                    <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 rounded-lg border transition-colors bg-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-800 text-slate-500 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white">
-                        {isDarkMode ? <Sun size={18}/> : <Moon size={18}/>}
-                    </button>
+                    <span className="text-sm font-medium text-slate-900 dark:text-white">
+                      {profile?.full_name?.split(' ')[0] || 'User'}
+                    </span>
+                  </div>
+                  
+                  {/* Sign Out */}
+                  <button
+                    onClick={handleSignOut}
+                    className="p-2 rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut size={18} />
+                  </button>
                 </div>
-                <div className="relative group">
-                    <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-neutral-500 transition-colors group-focus-within:text-indigo-500" size={16} />
-                    <input type="text" placeholder="Поиск..." value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={handleSearchKeyDown} className="w-full rounded-lg pl-9 pr-3 py-2 text-sm transition-all shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-neutral-600" />
-                </div>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-sm"
+                >
+                  <LogIn size={16} />
+                  <span>Sign In</span>
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Navigation Dropdown */}
+        <div className="md:hidden border-t border-slate-200 dark:border-neutral-800">
+          <nav className="px-4 py-2 flex gap-1 overflow-x-auto">
+            <Link
+              to="/"
+              className="flex-shrink-0 px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20"
+            >
+              Knowledge Base
+            </Link>
+            <Link
+              to="/calculator"
+              className="flex-shrink-0 px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+            >
+              FBO Calc
+            </Link>
+            <Link
+              to="/ozon-calculator"
+              className="flex-shrink-0 px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+            >
+              Ozon Calc
+            </Link>
+            <Link
+              to="/packaging-calculator"
+              className="flex-shrink-0 px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+            >
+              Packaging
+            </Link>
+            <Link
+              to="/exchange"
+              className="flex-shrink-0 px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-neutral-800"
+            >
+              Exchange
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* Main Content with Sidebar - adjust for fixed header */}
+      <div className="flex flex-1 pt-16 md:pt-20">
+
+        {/* SIDEBAR */}
+        <aside className={`fixed inset-y-0 left-0 z-40 w-full md:w-80 md:static border-r transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} bg-[#F9FAFB] dark:bg-black border-slate-200 dark:border-white/10`}>
+          {/* Mobile Overlay */}
+          {mobileMenuOpen && (
+            <div 
+              className="fixed inset-0 bg-black/50 z-[-1] md:hidden" 
+              onClick={() => setMobileMenuOpen(false)}
+            />
+          )}
+          
+          <div className="h-full overflow-y-auto custom-scrollbar flex flex-col">
+            <div className="p-5 sticky top-0 z-10 bg-[#F9FAFB] dark:bg-black transition-colors duration-300">
+              {/* Search Bar */}
+              <div className="relative group">
+                <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-neutral-500 transition-colors group-focus-within:text-indigo-500" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Search articles..." 
+                  value={inputValue} 
+                  onChange={(e) => setInputValue(e.target.value)} 
+                  onKeyDown={handleSearchKeyDown} 
+                  className="w-full rounded-lg pl-9 pr-3 py-2 text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-neutral-600" 
+                />
+              </div>
             </div>
 
-            <div className="px-3 pb-10 flex-1 space-y-6">
-                <div className="space-y-1 pb-4 border-b border-slate-200 dark:border-white/10 mx-2">
-                     <div className="px-3 py-2 text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-wider">Инструменты</div>
-                     <Link to="/calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900"><Calculator size={16}/> Калькулятор выгоды Wildberries FBO</Link>
-                     <Link to="/ozon-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-neutral-900"><div className="w-4 h-4 bg-blue-600 text-white rounded-[2px] text-[8px] flex items-center justify-center font-bold">Oz</div>Калькулятор выгоды Ozon FBO</Link>
-                     <Link to="/packaging-calculator" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-600 dark:text-neutral-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-white dark:hover:bg-neutral-900"><Package size={16}/> Расчет упаковки</Link>
-                     <Link to="/admin" className="mt-2 flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors text-slate-400 dark:text-neutral-500 hover:text-indigo-600 dark:hover:text-white hover:bg-white dark:hover:bg-neutral-900"><Home size={16}/> Админ-панель</Link>
-                </div>
+            <div className="px-3 pb-3 flex-1 space-y-6">
+              {/* Categories */}
+              <div className="space-y-1">
 
-                <div className="space-y-1">
-                    {displayCategories.map(cat => {
-                        const isSearchMode = debouncedTerm.length > 0;
-                        const isOpen = expandedCategories.includes(cat.id) || isSearchMode;
-                        const hasActiveArticle = cat.articles.some(a => a.id === selectedArticle?.id);
-                        return (
-                            <div key={cat.id} className="mb-1">
-                                <button onClick={() => toggleCategory(cat.id)} className={`w-full flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-md transition-colors ${hasActiveArticle ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-900 hover:text-slate-800 dark:hover:text-neutral-200'}`}>
-                                    <div className="flex items-center gap-2"><Folder size={16} className={hasActiveArticle ? 'fill-indigo-200 dark:fill-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-neutral-600'} /><span>{cat.title}</span></div>
-                                    {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                </button>
-                                {isOpen && (
-                                    <div className="mt-1 ml-2 pl-2 border-l border-slate-200 dark:border-neutral-800 space-y-0.5">
-                                        {(cat.articles || []).map(art => {
-                                            const isActive = selectedArticle?.id === art.id;
-                                            return (
-                                                <button key={art.id} onClick={() => openArticle(art, cat.id)} className={`w-full text-left px-3 py-1.5 text-[13px] rounded-md transition-all flex items-center gap-2 ${isActive ? 'bg-white dark:bg-neutral-800 text-indigo-600 dark:text-white font-medium shadow-sm border border-slate-100 dark:border-neutral-700' : 'text-slate-500 dark:text-neutral-500 hover:text-slate-900 dark:hover:text-neutral-300 hover:bg-slate-100/50 dark:hover:bg-neutral-900'}`}>
-                                                    {isActive ? <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 flex-shrink-0"></span> : <span className="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0"></span>}
-                                                    <span className="truncate"><HighlightText text={art.title} highlight={debouncedTerm} /></span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                  {displayCategories.map(cat => {
+                      const isSearchMode = debouncedTerm.length > 0;
+                      const isOpen = expandedCategories.includes(cat.id) || isSearchMode;
+                      const hasActiveArticle = cat.articles.some(a => a.id === selectedArticle?.id);
+                      return (
+                          <div key={cat.id} className="mb-1">
+                              <button onClick={() => toggleCategory(cat.id)} className={`w-full flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-md transition-colors ${hasActiveArticle ? 'text-indigo-700 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-neutral-400 hover:bg-slate-100 dark:hover:bg-neutral-900 hover:text-slate-800 dark:hover:text-neutral-200'}`}>
+                                  <div className="flex items-center gap-2"><Folder size={16} className={hasActiveArticle ? 'fill-indigo-200 dark:fill-indigo-900/50 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-neutral-600'} /><span>{cat.title}</span></div>
+                                  {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+                              {isOpen && (
+                                  <div className="mt-1 ml-2 pl-2 border-l border-slate-200 dark:border-neutral-800 space-y-0.5">
+                                      {(cat.articles || []).map(art => {
+                                          const isActive = selectedArticle?.id === art.id;
+                                          return (
+                                              <button key={art.id} onClick={() => openArticle(art, cat.id)} className={`w-full text-left px-3 py-1.5 text-[13px] rounded-md transition-all flex items-center gap-2 ${isActive ? 'bg-white dark:bg-neutral-800 text-indigo-600 dark:text-white font-medium shadow-sm border border-slate-100 dark:border-neutral-700' : 'text-slate-500 dark:text-neutral-500 hover:text-slate-900 dark:hover:text-neutral-300 hover:bg-slate-100/50 dark:hover:bg-neutral-900'}`}>
+                                                  {isActive ? <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 flex-shrink-0"></span> : <span className="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0"></span>}
+                                                  <span className="truncate"><HighlightText text={art.title} highlight={debouncedTerm} /></span>
+                                              </button>
+                                          );
+                                      })}
+                                  </div>
+                              )}
+                          </div>
+                      );
+                  })}
+              </div>
             </div>
-         </div>
-      </aside>
+          </div>
+        </aside>
 
-      {/* CONTENT */}
-      <main className="flex-1 min-h-screen w-full transition-colors duration-300 bg-white dark:bg-[#0a0a0a]">
-        <div className="max-w-[1200px] mx-auto flex items-start">
-            <div className="flex-1 px-6 py-10 md:px-12 md:py-12 min-w-0"> 
+        {/* CONTENT */}
+        <main className="flex-1 min-h-screen w-full transition-colors duration-300 bg-white dark:bg-[#0a0a0a]">
+          <div className="max-w-[1200px] mx-auto flex items-start">
+              <div className="flex-1 px-6 py-10 md:px-12 md:py-12 min-w-0"> 
                 {selectedArticle ? (
                     <div className="animate-in fade-in duration-300">
                         <nav className="flex items-center gap-2 text-xs font-medium text-slate-400 dark:text-neutral-500 mb-8 uppercase tracking-wide">
@@ -356,8 +557,9 @@ const HelpCenter = ({ data }) => {
                     </div>
                 )}
             </aside>
-        </div>
-      </main>
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

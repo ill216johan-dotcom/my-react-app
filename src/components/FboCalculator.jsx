@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, RefreshCw, X, Lock, Unlock, Sun, Moon, Search } from 'lucide-react';
+import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, Zap, RefreshCw, X, Lock, Unlock, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import CalculatorLayout from './CalculatorLayout';
 
 const FboCalculator = () => {
-  // --- THEME STATE ---
-  const [theme, setTheme] = useState('light');
-  const isDark = theme === 'dark';
-  const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
+  // --- THEME STATE (detecting from document) ---
+  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+  
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // --- Theme Configuration ---
   const t = useMemo(() => {
-    return theme === 'light'
+    return !isDark
       ? {
           // LIGHT THEME (Original)
           mainBg: 'bg-slate-50', mainText: 'text-slate-800', headerTitle: 'text-indigo-900',
@@ -65,7 +72,7 @@ const FboCalculator = () => {
           emptyInputBg: 'bg-[#18191c]', emptyInputText: 'text-gray-600', emptyInputBorder: 'border-gray-700',
           filledInputBg: 'bg-[#2a2d36]', filledInputText: 'text-indigo-300', filledInputBorder: 'border-indigo-500/50'
         };
-  }, [theme]);
+  }, [isDark]);
 
   // --- 1. ПАРАМЕТРЫ ТОВАРА ---
   const [product, setProduct] = useState({
@@ -401,34 +408,8 @@ const FboCalculator = () => {
   ];
 
   return (
-    <div className={`p-4 min-h-screen font-sans transition-colors duration-200 ${t.mainBg} ${t.mainText}`}>
-      <div className="max-w-7xl mx-auto">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-          <div>
-            <h1 className={`text-2xl font-bold flex items-center gap-2 ${t.headerTitle}`}>
-                <Truck className={t.iconPrimary} /> Калькулятор выгоды Wildberries FBO
-            </h1>
-            <p className={`text-sm ${t.subtitleText}`}>Управление Индексом Локализации и логистикой</p>
-          </div>
-          <div className="flex gap-2">
-             <button 
-                onClick={resetToCentral}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border ${t.cardBg} ${t.inputText} ${t.cardBorder} hover:opacity-80 flex items-center gap-2 transition-colors`}
-             >
-                <RotateCcw size={16} /> Сброс
-             </button>
-             <button 
-                onClick={toggleTheme}
-                className={`p-2 rounded-lg border ${t.cardBg} ${t.inputText} ${t.cardBorder} hover:opacity-80 transition-colors`}
-                title={theme === 'light' ? 'Переключить на темную тему' : 'Переключить на светлую тему'}
-             >
-                {t.isDark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} className="text-indigo-600" />}
-             </button>
-          </div>
-        </div>
-
+    <CalculatorLayout title="Wildberries FBO Calculator">
+      <div className={`transition-colors duration-200 ${t.mainBg} ${t.mainText}`}>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* LEFT: Configuration (5 cols) */}
@@ -730,7 +711,7 @@ const FboCalculator = () => {
           </div>
         </div>
       </div>
-    </div>
+    </CalculatorLayout>
   );
 };
 

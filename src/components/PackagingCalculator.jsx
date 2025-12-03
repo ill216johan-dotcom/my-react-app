@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Plus, Save, Copy, Trash2, Box, Check, 
-  ChevronDown, Package, Sun, Moon, X 
+  ChevronDown, Package, X 
 } from 'lucide-react';
+import CalculatorLayout from './CalculatorLayout';
 
 // --- КОНФИГУРАЦИЯ ПО УМОЛЧАНИЮ (Коэффициенты) ---
 const DEFAULT_SETTINGS = {
@@ -60,12 +61,7 @@ const LAYERS = {
 
 export default function PackagingCalculator() {
   // --- STATE ---
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-      try {
-          const saved = localStorage.getItem('theme');
-          return saved === 'dark';
-      } catch (e) { return false; }
-  });
+  const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
 
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -94,14 +90,12 @@ export default function PackagingCalculator() {
 
   // --- ЭФФЕКТЫ ---
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // --- ЛОГИКА ПОДБОРА ПАКЕТА ---
   const getBagPrice = (type, L, W, H) => {
@@ -424,9 +418,9 @@ export default function PackagingCalculator() {
   }
 
   return (
-    <div className={`min-h-screen font-sans transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-neutral-300' : 'bg-gray-100 text-gray-800'}`}>
-      
-      <div className="max-w-7xl mx-auto h-screen p-4 md:p-8 flex flex-col md:flex-row gap-6">
+    <CalculatorLayout title="Packaging Calculator">
+      <div className={`font-sans transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-neutral-300' : 'bg-gray-100 text-gray-800'}`}>
+        <div className="max-w-7xl mx-auto p-4 md:p-8 flex flex-col md:flex-row gap-6">
         
         {/* LEFT: Calculator */}
         <div className="flex-1 flex flex-col gap-4 overflow-y-auto pr-2 no-scrollbar">
@@ -435,16 +429,6 @@ export default function PackagingCalculator() {
             {/* HEADER */}
             <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4 ${isDarkMode ? 'border-neutral-800' : 'border-gray-200'}`}>
               <div className="flex items-center gap-2">
-                <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-neutral-100' : 'text-gray-800'}`}>Калькулятор</h2>
-                
-                <button 
-                    onClick={() => setIsDarkMode(!isDarkMode)}
-                    className={`p-1.5 rounded-lg border transition-colors ml-2 ${isDarkMode ? 'bg-neutral-800 border-neutral-700 text-yellow-400 hover:text-white' : 'bg-gray-100 border-gray-300 text-gray-500'}`}
-                    title="Сменить тему"
-                >
-                    {isDarkMode ? <Sun size={14}/> : <Moon size={14}/>}
-                </button>
-
                 {activeSkuId ? (
                   <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded border ${isDarkMode ? 'bg-blue-900/20 text-blue-400 border-blue-800' : 'bg-blue-100 text-blue-600 border-blue-200'}`}>
                     <span className="font-bold">Редактирование</span>
@@ -707,6 +691,7 @@ export default function PackagingCalculator() {
           </div>
         </div>
 
+        </div>
       </div>
       <style>{`
         /* Custom scrollbar for dark mode */
@@ -715,6 +700,6 @@ export default function PackagingCalculator() {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
-    </div>
+    </CalculatorLayout>
   );
 }
