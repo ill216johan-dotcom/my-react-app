@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Lock, Unlock, X, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Truck, Box, TrendingUp, DollarSign, BarChart3, Calculator, RotateCcw, Package, Info, Zap, Map, Settings, CheckSquare, Square, RefreshCw, AlertTriangle, Clock, Edit3, Lock, Unlock, X, ShieldAlert, ShieldCheck, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import CalculatorLayout from './CalculatorLayout';
 import { supabase } from '../../supabaseClient';
@@ -109,6 +109,9 @@ const OzonCalculator = () => {
   
   // Состояние: какие кластеры клиент использует СЕЙЧАС (для расчета "До")
   const [clientSelectedClusters, setClientSelectedClusters] = useState(['msk']);
+  
+  // Состояние: поиск складов
+  const [clusterSearch, setClusterSearch] = useState('');
 
   // --- WMS PARAMETERS (Admin Only) ---
   const [wmsParams, setWmsParams] = useState({
@@ -117,6 +120,12 @@ const OzonCalculator = () => {
     leadTime: 7,
     safetyStock: 25
   });
+
+  // Фильтрация кластеров для поиска
+  const filteredClusters = useMemo(() => {
+    if (!clusterSearch) return clusters;
+    return clusters.filter(c => c.name.toLowerCase().includes(clusterSearch.toLowerCase()));
+  }, [clusters, clusterSearch]);
 
   // --- ВЫЧИСЛЕНИЯ ПАРТИИ ---
   const itemLiterage = (product.width * product.height * product.length) / 1000;
@@ -421,8 +430,18 @@ const OzonCalculator = () => {
                 <div className="space-y-3">
                     <div>
                         <label className={`text-[10px] uppercase font-bold ${theme.secondary} mb-1 block`}>Куда возите сейчас?</label>
+                        <div className="relative mb-2">
+                            <Search size={14} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${theme.secondary}`} />
+                            <input 
+                                type="text"
+                                placeholder="Поиск склада..."
+                                value={clusterSearch}
+                                onChange={(e) => setClusterSearch(e.target.value)}
+                                className={`w-full pl-8 p-1.5 text-xs border rounded-md outline-none ${theme.inputBg} ${theme.inputBorder} ${theme.text} focus:ring-2 focus:ring-blue-500`}
+                            />
+                        </div>
                         <div className={`max-h-32 overflow-y-auto border ${theme.card} rounded-lg p-1 custom-scrollbar`}>
-                            {clusters.map(c => {
+                            {filteredClusters.map(c => {
                                 const isSelected = clientSelectedClusters.includes(c.id);
                                 return (
                                     <div 

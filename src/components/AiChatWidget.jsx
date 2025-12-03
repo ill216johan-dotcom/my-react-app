@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Loader2, Bot, User } from 'lucide-react';
+import { Sparkles, X, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 const AiChatWidget = () => {
@@ -25,7 +25,7 @@ const AiChatWidget = () => {
   }, [messages, isOpen]);
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
 
     const userMessage = { role: 'user', content: input };
     const currentInput = input;
@@ -67,71 +67,169 @@ const AiChatWidget = () => {
     }
   };
 
+  // Typing Indicator Component
+  const TypingIndicator = () => (
+    <div className="flex gap-3">
+      <div className="flex gap-1 items-center bg-gray-100 dark:bg-neutral-800 px-4 py-3 rounded-2xl rounded-tl-sm">
+        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
+      {/* Chat Window */}
       {isOpen && (
-        <div className="mb-4 w-[350px] h-[500px] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-neutral-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
-          <div className="bg-blue-600 p-4 flex justify-between items-center text-white">
-            <div className="flex items-center gap-2">
-                <Bot size={20} />
-                <span className="font-bold">AI Помощник</span>
+        <div 
+          className="mb-4 w-[380px] h-[550px] bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ease-out animate-in slide-in-from-bottom-5 fade-in"
+          style={{ 
+            animation: 'slideUp 0.3s ease-out',
+          }}
+        >
+          {/* Header with Gradient */}
+          <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 p-5 flex justify-between items-center text-white">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                <Sparkles size={20} className="text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-base">AI Assistant</h3>
+                <p className="text-xs text-indigo-100">Always here to help</p>
+              </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded transition">
-              <X size={18} />
+            <button 
+              onClick={() => setIsOpen(false)} 
+              className="hover:bg-white/20 p-1.5 rounded-lg transition-all duration-200 hover:scale-110"
+              aria-label="Close chat"
+            >
+              <X size={20} />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 dark:bg-black/20">
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50 dark:bg-neutral-950">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-indigo-500 text-white' : 'bg-emerald-500 text-white'}`}>
-                    {msg.role === 'user' ? <User size={16}/> : <Bot size={16}/>}
-                </div>
-                <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+              <div 
+                key={idx} 
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className={`max-w-[85%] ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+                  {/* Timestamp */}
+                  <div className={`text-xs text-gray-500 mb-1 px-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                    {msg.role === 'user' ? 'You' : 'AI'}
+                  </div>
+                  {/* Message Bubble */}
+                  <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                     msg.role === 'user' 
-                    ? 'bg-indigo-600 text-white rounded-tr-none' 
-                    : 'bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 text-slate-800 dark:text-slate-200 rounded-tl-none shadow-sm'
-                }`}>
+                      ? 'bg-indigo-600 text-white rounded-tr-sm shadow-md' 
+                      : 'bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 rounded-tl-sm shadow-sm'
+                  }`}>
                     <ReactMarkdown 
-                        components={{
-                            ul: ({node, ...props}) => <ul className="list-disc pl-4 my-1" {...props} />,
-                            ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-1" {...props} />,
-                            a: ({node, ...props}) => <a className="text-blue-300 hover:underline" target="_blank" {...props} />
-                        }}
+                      components={{
+                        p: ({node, ...props}) => <p className="leading-relaxed" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal pl-4 my-2 space-y-1" {...props} />,
+                        code: ({node, inline, ...props}) => 
+                          inline 
+                            ? <code className="bg-black/10 px-1.5 py-0.5 rounded text-xs font-mono" {...props} />
+                            : <code className="block bg-black/10 p-2 rounded my-2 text-xs font-mono overflow-x-auto" {...props} />,
+                        a: ({node, ...props}) => 
+                          <a 
+                            className={msg.role === 'user' ? 'underline hover:text-indigo-200' : 'text-indigo-600 hover:text-indigo-700 underline'} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            {...props} 
+                          />
+                      }}
                     >
-                        {msg.content}
+                      {msg.content}
                     </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             ))}
-            {isLoading && (
-               <div className="flex gap-3">
-                   <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0"><Bot size={16}/></div>
-                   <div className="bg-white dark:bg-neutral-800 p-3 rounded-2xl rounded-tl-none shadow-sm border border-slate-200 dark:border-neutral-700">
-                       <Loader2 className="animate-spin text-slate-400" size={18} />
-                   </div>
-               </div>
-            )}
+            
+            {/* Typing Indicator */}
+            {isLoading && <TypingIndicator />}
+            
             <div ref={messagesEndRef} />
           </div>
-          <div className="p-3 bg-white dark:bg-neutral-900 border-t border-slate-100 dark:border-neutral-800">
-            <div className="flex gap-2">
-                <input 
-                    className="flex-1 bg-slate-100 dark:bg-neutral-800 border-0 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                    placeholder="Задайте вопрос..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                />
-                <button onClick={handleSend} disabled={isLoading || !input.trim()} className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition">
-                    <Send size={18} />
-                </button>
+
+          {/* Input Area */}
+          <div className="p-4 bg-white dark:bg-neutral-900 border-t border-gray-200 dark:border-neutral-800">
+            <div className="relative flex items-center">
+              <input 
+                className="flex-1 bg-gray-100 dark:bg-neutral-800 border-0 rounded-full pl-5 pr-12 py-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-neutral-700 outline-none transition-all duration-200 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                placeholder="Type your message..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                disabled={isLoading}
+              />
+              <button 
+                onClick={handleSend} 
+                disabled={isLoading || !input.trim()} 
+                className="absolute right-1.5 bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
+                aria-label="Send message"
+              >
+                <Send size={18} />
+              </button>
             </div>
           </div>
         </div>
       )}
-      <button onClick={() => setIsOpen(!isOpen)} className={`p-4 rounded-full shadow-lg transition-all duration-300 hover:scale-110 ${isOpen ? 'bg-slate-200 text-slate-600 rotate-90' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-        {isOpen ? <X size={24}/> : <MessageCircle size={24}/>}
+
+      {/* Floating Launcher Button */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className={`group relative w-14 h-14 rounded-full shadow-2xl transition-all duration-300 hover:scale-110 active:scale-95 ${
+          isOpen 
+            ? 'bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-gray-300' 
+            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+        }`}
+        style={{
+          animation: isOpen ? '' : 'fadeIn 0.5s ease-out'
+        }}
+        aria-label={isOpen ? 'Close chat' : 'Open chat'}
+      >
+        {isOpen ? (
+          <X size={24} className="m-auto transition-transform duration-300" />
+        ) : (
+          <Sparkles size={24} className="m-auto transition-transform duration-300 group-hover:rotate-12" />
+        )}
+        
+        {/* Pulse animation ring when closed */}
+        {!isOpen && (
+          <span className="absolute inset-0 rounded-full bg-indigo-600 animate-ping opacity-20"></span>
+        )}
       </button>
+
+      {/* CSS Animations */}
+      <style jsx>{`
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 };

@@ -154,27 +154,50 @@ const HelpCenter = ({ data }) => {
     }
   };
 
+  // Helper function to calculate article relevance score
+  const calculateScore = (article, query) => {
+      let score = 0;
+      const queryLower = query.toLowerCase().trim();
+      const titleLower = (article.title || '').toLowerCase();
+      const contentLower = (article.content || '').toLowerCase();
+      
+      // High Priority: Title matches = +100 points (ensures top placement)
+      if (titleLower.includes(queryLower)) {
+          score += 100;
+      }
+      
+      // Medium Priority: Content matches = +10 points
+      if (contentLower.includes(queryLower)) {
+          score += 10;
+      }
+      
+      return score;
+  };
+
   const displayCategories = useMemo(() => {
       if (!debouncedTerm) return categories;
-      const lowerTerm = debouncedTerm.toLowerCase();
+      const lowerTerm = debouncedTerm.toLowerCase().trim();
       let hasMatches = false;
+      
       const mappedCats = categories.map(cat => {
           const safeArticles = cat.articles || [];
-          const matchingArticles = safeArticles.filter(art => {
-              const inTitle = (art.title || '').toLowerCase().includes(lowerTerm);
-              const inContent = (art.content || '').toLowerCase().includes(lowerTerm);
-              return inTitle || inContent;
-          });
-          matchingArticles.sort((a, b) => {
-              const aTitle = (a.title || '').toLowerCase().includes(lowerTerm);
-              const bTitle = (b.title || '').toLowerCase().includes(lowerTerm);
-              if (aTitle && !bTitle) return -1;
-              if (!aTitle && bTitle) return 1;
-              return 0;
-          });
+          
+          // Calculate score for each article
+          const articlesWithScores = safeArticles.map(art => ({
+              ...art,
+              score: calculateScore(art, lowerTerm)
+          }));
+          
+          // Filter out articles with score 0 (no matches)
+          const matchingArticles = articlesWithScores.filter(art => art.score > 0);
+          
+          // Sort by score descending (highest score first)
+          matchingArticles.sort((a, b) => b.score - a.score);
+          
           if (matchingArticles.length > 0) hasMatches = true;
           return { ...cat, articles: matchingArticles };
       }).filter(cat => cat.articles.length > 0);
+      
       if (!hasMatches) return categories;
       return mappedCats;
   }, [categories, debouncedTerm]);
