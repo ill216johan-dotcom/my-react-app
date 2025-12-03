@@ -8,7 +8,6 @@ import PackagingCalculator from './components/PackagingCalculator';
 import AdminPanel from './components/AdminPanel';
 import Auth from './pages/Auth';
 import Exchange from './pages/Exchange';
-import AdminImages from './pages/AdminImages';
 import AuthGuard from './components/AuthGuard';
 
 // МЫ УДАЛИЛИ ИМПОРТ rawData, чтобы облегчить сборку!
@@ -107,7 +106,6 @@ function App() {
             <Route path="/ozon-calculator" element={<OzonCalculator />} />
             <Route path="/packaging-calculator" element={<PackagingCalculator />} />
             <Route path="/admin" element={<AdminPanel data={data} onSave={handleDataUpdate} />} />
-            <Route path="/admin/images" element={<AdminImages />} />
             <Route path="/auth" element={<Auth />} />
             <Route 
               path="/exchange" 

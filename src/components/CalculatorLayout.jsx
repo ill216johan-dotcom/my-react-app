@@ -92,7 +92,7 @@ const CalculatorLayout = ({ children, title }) => {
 
   // Add Admin Panel for admins only
   const navItems = profile?.role === 'admin' 
-    ? [...baseNavItems, { path: '/admin', label: '⚙️ Админ-панель' }, { path: '/admin/images', label: '🖼️ Изображения' }]
+    ? [...baseNavItems, { path: '/admin', label: '⚙️ Админ-панель' }]
     : baseNavItems;    
 
   const isActive = (item) => {

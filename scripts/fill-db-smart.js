@@ -3,34 +3,11 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
-import { fileURLToPath } from 'url';
 
-// --- МАГИЯ ПУТЕЙ ---
-// Получаем путь к текущей папке (scripts)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config();
 
-// Явно указываем путь к .env файлу (он на уровень выше, в корне)
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-
-// --- ОТЛАДКА (ПРОВЕРКА) ---
-console.log("-----------------------------------");
-if (!process.env.VITE_SUPABASE_URL) {
-    console.error("❌ ОШИБКА: Не вижу VITE_SUPABASE_URL. Проверь файл .env!");
-    process.exit(1);
-} else {
-    console.log("✅ Supabase URL найден");
-}
-if (!process.env.YANDEX_API_KEY) {
-    console.error("❌ ОШИБКА: Не вижу YANDEX_API_KEY. Проверь файл .env!");
-    process.exit(1);
-} else {
-    console.log("✅ Yandex Key найден");
-}
-console.log("-----------------------------------");
-
-// --- НАСТРОЙКИ ---
-const CHUNK_SIZE = 800;
+// Настройки
+const CHUNK_SIZE = 800; // Размер кусочка текста (символов). 800 - оптимально для поиска.
 const YANDEX_API_KEY = process.env.YANDEX_API_KEY;
 const FOLDER_ID = process.env.YANDEX_FOLDER_ID;
 
@@ -38,8 +15,6 @@ const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.VITE_SUPABASE_ANON_KEY
 );
-
-// ... Дальше твой старый код (function splitText и т.д.) ...
 
 // Функция нарезки текста (Chunking)
 function splitText(text, maxLength) {

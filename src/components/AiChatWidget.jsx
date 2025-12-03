@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 const AiChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -128,7 +127,6 @@ const AiChatWidget = () => {
                       : 'bg-gray-100 dark:bg-neutral-800 text-gray-800 dark:text-gray-200 rounded-tl-sm shadow-sm'
                   }`}>
                     <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]}
                       components={{
                         p: ({node, ...props}) => <p className="leading-relaxed" {...props} />,
                         ul: ({node, ...props}) => <ul className="list-disc pl-4 my-2 space-y-1" {...props} />,
@@ -139,17 +137,10 @@ const AiChatWidget = () => {
                             : <code className="block bg-black/10 p-2 rounded my-2 text-xs font-mono overflow-x-auto" {...props} />,
                         a: ({node, ...props}) => 
                           <a 
-                            className={msg.role === 'user' ? 'text-blue-200 underline hover:text-blue-100' : 'text-indigo-600 hover:text-indigo-700 underline'} 
+                            className={msg.role === 'user' ? 'underline hover:text-indigo-200' : 'text-indigo-600 hover:text-indigo-700 underline'} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             {...props} 
-                          />,
-                        img: ({node, ...props}) => 
-                          <img 
-                            {...props} 
-                            className="max-w-full rounded-lg mt-2" 
-                            style={{maxHeight: '200px'}} 
-                            alt={props.alt || 'Image'}
                           />
                       }}
                     >

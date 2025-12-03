@@ -23,8 +23,6 @@
     "react-quill-new": "^3.6.0",
     "react-router-dom": "^7.10.0",
     "recharts": "^3.5.1",
-    "remark-gfm": "^4.0.1",
-    "turndown": "^7.2.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"
   },
   "devDependencies": {
