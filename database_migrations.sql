@@ -191,3 +191,4 @@ SELECT
   (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'is_disputed') AS is_disputed_column_exists,
   (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'accepted_packer_id') AS accepted_packer_id_column_exists;
 
+

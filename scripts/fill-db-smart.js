@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { fileURLToPath } from 'url';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 
 // --- ХАРДКОД НАСТРОЕК (ЧТОБЫ НАВЕРНЯКА) ---
 
@@ -18,7 +20,7 @@ const CHUNK_SIZE = 800;
 const KNOWLEDGE_DIR = './knowledge';
 
 // --- ПРОВЕРКА ---
-if (SUPABASE_URL.includes('ВСТАВЬ')) {
+if (!SUPABASE_URL || SUPABASE_URL.includes('ВСТАВЬ')) {
     console.error("❌ ОШИБКА: Ты забыл вставить ключи Supabase в код скрипта (строки 10-11)!");
     process.exit(1);
 }
@@ -31,42 +33,11 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-function splitText(text, maxLength) {
-  const chunks = [];
-  let paragraphs = text.split(/\n\s*\n/);
-  let currentChunk = "";
-
-  for (let para of paragraphs) {
-    para = para.trim();
-    if (!para) continue;
-
-    if (para.length > maxLength) {
-        if (currentChunk) { chunks.push(currentChunk); currentChunk = ""; }
-        const sentences = para.match(/[^.!?]+[.!?]+(\s|$)/g) || [para];
-        let tempChunk = "";
-        for (let sent of sentences) {
-            if ((tempChunk.length + sent.length) > maxLength) {
-                chunks.push(tempChunk);
-                tempChunk = sent;
-            } else {
-                tempChunk += sent;
-            }
-        }
-        if (tempChunk) chunks.push(tempChunk);
-        continue;
-    }
-
-    if ((currentChunk.length + para.length) < maxLength) {
-      currentChunk += (currentChunk ? "\n\n" : "") + para;
-    } else {
-      chunks.push(currentChunk);
-      currentChunk = para;
-    }
-  }
-  
-  if (currentChunk) chunks.push(currentChunk);
-  return chunks;
-}
+// Инициализируем LangChain text splitter
+const textSplitter = new RecursiveCharacterTextSplitter({
+  chunkSize: CHUNK_SIZE,
+  chunkOverlap: 0,
+});
 
 async function getYandexEmbedding(text) {
   // Искуственная задержка
@@ -88,6 +59,16 @@ async function getYandexEmbedding(text) {
 }
 
 async function processFile() {
+  // Очищаем старые данные перед загрузкой новых
+  console.log("🗑️  Очищаю старые данные из базы...");
+  const { error: deleteError } = await supabase.from('documents').delete().neq('id', 0); // Удаляем все записи
+  if (deleteError) {
+    console.error("⚠️  Ошибка при очистке базы:", deleteError.message);
+    console.log("Продолжаю загрузку (возможны дубликаты)...");
+  } else {
+    console.log("✅ Старые данные удалены.");
+  }
+
   const filePath = path.join('knowledge', 'full_dump.txt');
   
   if (!fs.existsSync(filePath)) {
@@ -98,8 +79,15 @@ async function processFile() {
   console.log("📖 Читаю большой файл...");
   const fullText = fs.readFileSync(filePath, 'utf-8');
   
-  console.log("🔪 Нарезаю на кусочки...");
-  const chunks = splitText(fullText, CHUNK_SIZE);
+  // Убеждаемся, что это строка
+  if (typeof fullText !== 'string') {
+    console.error("❌ Ошибка: файл не является текстовым!");
+    return;
+  }
+  
+  console.log("🔪 Нарезаю на кусочки с помощью LangChain...");
+  // Используем LangChain text splitter - splitText принимает строку напрямую
+  const chunks = await textSplitter.splitText(fullText);
   console.log(`🧩 Получилось ${chunks.length} фрагментов. Начинаем загрузку...`);
 
   let i = 0;

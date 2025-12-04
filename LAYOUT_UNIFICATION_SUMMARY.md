@@ -44,3 +44,4 @@ The `CalculatorLayout` component provides:
 
 All pages in the tools/calculator section now share the same layout and navigation structure.
 
+

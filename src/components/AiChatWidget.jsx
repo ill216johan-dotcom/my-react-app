@@ -2,6 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
+// Компонент для отображения изображений в Markdown
+const MarkdownImage = ({ src, alt, ...props }) => {
+  const [hasError, setHasError] = useState(false);
+  
+  if (hasError) return null;
+  
+  return (
+    <img
+      src={src}
+      alt={alt || 'Изображение'}
+      className="max-w-full rounded-lg my-2 cursor-pointer hover:opacity-90 transition-opacity"
+      style={{ display: hasError ? 'none' : 'block' }}
+      onError={() => setHasError(true)}
+      onClick={() => window.open(src, '_blank')}
+      {...props}
+    />
+  );
+};
+
 const AiChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -141,7 +160,10 @@ const AiChatWidget = () => {
                             target="_blank" 
                             rel="noopener noreferrer"
                             {...props} 
-                          />
+                          />,
+                        img: ({node, ...props}) => (
+                          <MarkdownImage {...props} />
+                        )
                       }}
                     >
                       {msg.content}
