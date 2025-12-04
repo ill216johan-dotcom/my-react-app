@@ -118,10 +118,6 @@ function App() {
               } 
             />
           </Routes>
-          
-          <button onClick={hardReset} className="fixed bottom-2 left-2 text-[10px] text-slate-400 hover:text-red-600 font-bold z-50 bg-white/80 px-2 py-1 rounded shadow border">
-            ↻ ОБНОВИТЬ СТРУКТУРУ
-          </button>
       <AiChatWidget /></div>
     </Router>
   );

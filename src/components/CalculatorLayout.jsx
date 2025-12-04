@@ -185,10 +185,10 @@ const CalculatorLayout = ({ children, title }) => {
               ) : (
                 <Link
                   to="/auth"
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-sm"
+                  className="flex items-center p-2 md:px-4 md:py-2 md:gap-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors shadow-sm"
                 >
                   <LogIn size={16} />
-                  <span>Войти</span>
+                  <span className="hidden md:inline">Войти</span>
                 </Link>
               )}
             </div>
@@ -216,7 +216,7 @@ const CalculatorLayout = ({ children, title }) => {
       </header>
 
       {/* Main Content Area - with padding to account for fixed header */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-6 lg:px-8 pt-24 md:pt-20 pb-8">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-6 lg:px-8 pt-32 md:pt-20 pb-8">
         {title && (
           <h1 className="text-3xl md:text-4xl font-bold mb-8 leading-tight text-slate-900 dark:text-white">
             {title}
