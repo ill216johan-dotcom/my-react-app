@@ -400,6 +400,18 @@ const OzonCalculator = () => {
       inputBorder: isDarkMode ? 'border-zinc-700' : 'border-slate-200',
       inputText: isDarkMode ? 'text-zinc-200' : 'text-slate-700',
       focusRing: 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+      iconPrimary: isDarkMode ? 'text-blue-400' : 'text-blue-600',
+      buttonBase: isDarkMode ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50',
+  };
+
+  // Reset function
+  const resetToCentral = () => {
+    setClusters(initialClusters.map(c => c.id === 'msk' ? { ...c, boxCount: 15 } : { ...c, boxCount: 0, enabled: false }));
+    setClientSelectedClusters(['msk']);
+    setManualTotalItems(null);
+    setManualUnitsPerBox(null);
+    setManualLiterage(null);
+    setRiskMode('normal');
   };
 
   // --- LOGIC FOR COLORED BLOCK ---
@@ -414,10 +426,20 @@ const OzonCalculator = () => {
     : (isDarkMode ? 'text-zinc-200' : 'text-slate-800');
 
   return (
-    <CalculatorLayout title="Калькулятор выгоды Ozon FBO">
-      <div className={`${theme.bg} ${theme.text} transition-colors duration-200`}>
+    <CalculatorLayout>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+              <h1 className={`text-2xl font-bold flex items-center gap-2 ${t.headerTitle}`}>
+                  <Truck className={t.iconPrimary} /> Калькулятор выгоды Ozon FBO
+              </h1>
+              <p className={`text-sm ${t.subtitleText}`}>Управление СВД (Среднее время доставки) и распределением по кластерам</p>
+          </div>
+          <button onClick={resetToCentral} className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-2 ${t.buttonBase}`}>
+              <RotateCcw size={16} /> Сброс
+          </button>
+        </div>
+        
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
           {/* LEFT COLUMN */}
           <div className="lg:col-span-5 space-y-4">
             
@@ -875,7 +897,6 @@ const OzonCalculator = () => {
 
           </div>
         </div>
-      </div>
     </CalculatorLayout>
   );
 };

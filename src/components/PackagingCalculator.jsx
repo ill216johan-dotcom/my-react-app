@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Settings, Plus, Save, Copy, Trash2, Box, Check, 
-  ChevronDown, Package, X 
+  ChevronDown, Package, X, Truck, RotateCcw
 } from 'lucide-react';
 import CalculatorLayout from './CalculatorLayout.jsx';
 
@@ -417,8 +417,41 @@ export default function PackagingCalculator() {
      errorMsg = `Габариты > ${settings.max_l}x${settings.max_w}x${settings.max_h} для термоусадки!`;
   }
 
+  // Theme configuration
+  const t = {
+    headerTitle: isDarkMode ? 'text-blue-300' : 'text-blue-900',
+    subtitleText: isDarkMode ? 'text-neutral-500' : 'text-gray-400',
+    iconPrimary: isDarkMode ? 'text-blue-400' : 'text-blue-600',
+    buttonBase: isDarkMode ? 'bg-neutral-800 border-neutral-700 text-neutral-200 hover:bg-neutral-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50',
+  };
+
+  // Reset function
+  const resetToCentral = () => {
+    setInputs({
+      len: 15, wid: 15, hgt: 7, wgt: 0.45, qty: 1,
+      layer1: 'thermo', layer2: 'vpp1', kiz: false,
+      customCost: 0
+    });
+    setSkus([]);
+    setActiveSkuId(null);
+    setTempName('');
+    setImportText('');
+    setShowSettings(false);
+  };
+
   return (
-    <CalculatorLayout title="Калькулятор упаковки">
+    <CalculatorLayout>
+      <div className="flex justify-between items-center mb-6">
+          <div>
+              <h1 className={`text-2xl font-bold flex items-center gap-2 ${t.headerTitle}`}>
+                  <Truck className={t.iconPrimary} /> Калькулятор упаковки
+              </h1>
+              <p className={`text-sm ${t.subtitleText}`}>Расчёт стоимости услуг упаковки и упаковочных материалов</p>
+          </div>
+          <button onClick={resetToCentral} className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors flex items-center gap-2 ${t.buttonBase}`}>
+              <RotateCcw size={16} /> Сброс
+          </button>
+        </div>
       <div className={`font-sans transition-colors duration-300 ${isDarkMode ? 'bg-[#0a0a0a] text-neutral-300' : 'bg-gray-100 text-gray-800'}`}>
         <div className="max-w-7xl mx-auto p-4 md:p-8 flex flex-col md:flex-row gap-6">
         
