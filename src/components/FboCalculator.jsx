@@ -3,8 +3,36 @@ import { Truck, Box, DollarSign, RotateCcw, Map, Settings, CheckSquare, Square, 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 import CalculatorLayout from './CalculatorLayout.jsx';
+import { supabase } from '../supabaseClient.js';
 
 const FboCalculator = () => {
+  // --- AUTH STATE (Role check) ---
+  const [userProfile, setUserProfile] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          setUserProfile(profile);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const canManageSettings = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+
   // --- THEME STATE ---
   // Sync with CalculatorLayout's theme by detecting dark class on document
   const [isDark, setIsDark] = useState(false);
@@ -555,27 +583,29 @@ const FboCalculator = () => {
           </div>
           
           {/* 4. Rates */}
-          <div className={`${t.cardBg} p-3 rounded-xl shadow-sm border ${t.cardBorder}`}>
-              <details className="text-sm">
-                  <summary className={`font-semibold cursor-pointer flex items-center gap-2 ${t.inputText}`}><DollarSign size={14} className="text-green-500" /> Настройки тарифов фулфилмента</summary>
-                  <div className={`mt-3 space-y-4 pl-2 border-l-2 ${isDark ? 'border-gray-800' : 'border-slate-100'}`}>
-                      <div>
-                          <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">За единицу товара (₽/шт)</div>
-                          <div className="space-y-1">
-                              <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Обработка</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.processing} onChange={e => setFfRates({...ffRates, processing: +e.target.value})} /></div>
-                              <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Спецификация</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
-                          </div>
-                      </div>
-                      <div>
-                           <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">За короб (₽/кор)</div>
-                           <div className="space-y-1">
-                              <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Сборка и марк.</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxAssembly} onChange={e => setFfRates({...ffRates, boxAssembly: +e.target.value})} /></div>
-                              <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Цена короба</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxMaterial} onChange={e => setFfRates({...ffRates, boxMaterial: +e.target.value})} /></div>
-                           </div>
-                      </div>
-                  </div>
-              </details>
-          </div>
+          {canManageSettings && (
+            <div className={`${t.cardBg} p-3 rounded-xl shadow-sm border ${t.cardBorder}`}>
+                <details className="text-sm">
+                    <summary className={`font-semibold cursor-pointer flex items-center gap-2 ${t.inputText}`}><DollarSign size={14} className="text-green-500" /> Настройки тарифов фулфилмента</summary>
+                    <div className={`mt-3 space-y-4 pl-2 border-l-2 ${isDark ? 'border-gray-800' : 'border-slate-100'}`}>
+                        <div>
+                            <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">За единицу товара (₽/шт)</div>
+                            <div className="space-y-1">
+                                <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Обработка</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.processing} onChange={e => setFfRates({...ffRates, processing: +e.target.value})} /></div>
+                                <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Спецификация</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
+                            </div>
+                        </div>
+                        <div>
+                             <div className="text-[10px] font-bold text-indigo-400 uppercase mb-1">За короб (₽/кор)</div>
+                             <div className="space-y-1">
+                                <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Сборка и марк.</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxAssembly} onChange={e => setFfRates({...ffRates, boxAssembly: +e.target.value})} /></div>
+                                <div className="flex justify-between items-center"><span className={`text-xs ${t.inputText}`}>Цена короба</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxMaterial} onChange={e => setFfRates({...ffRates, boxMaterial: +e.target.value})} /></div>
+                             </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+          )}
         </div>
 
         {/* RIGHT: Results */}

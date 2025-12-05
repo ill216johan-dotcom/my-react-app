@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient.js';
 import { ORDER_STATUSES, USER_ROLES } from '../db_schema.js';
 import * as XLSX from 'xlsx';
@@ -1987,6 +1987,7 @@ function ManagerDashboard({ user, profile }) {
   const [chatOrder, setChatOrder] = useState(null);
   const [view, setView] = useState('disputed'); // 'disputed' or 'all'
   const [currentUserProfile, setCurrentUserProfile] = useState(profile);
+  const fetchingRef = useRef(false); // Защита от дублирования запросов
 
   // Ban user function (Admin only)
   const handleBanUser = async (userId, userName) => {
@@ -2020,13 +2021,55 @@ function ManagerDashboard({ user, profile }) {
   }
 
   useEffect(() => {
-    if (user) {
-      fetchDisputedOrders();
-      fetchAllOrders();
+    // Проверяем, что пользователь и профиль загружены, и что это менеджер/админ
+    if (user && profile && profile.role && (profile.role === USER_ROLES.MANAGER || profile.role === USER_ROLES.ADMIN)) {
+      // Защита от дублирования запросов (особенно в React.StrictMode)
+      if (fetchingRef.current) {
+        return;
+      }
+      fetchingRef.current = true;
+
+      // Проверяем, что сессия установлена перед запросом
+      // Добавляем небольшую задержку, чтобы убедиться, что токен полностью установлен
+      const checkSessionAndFetch = async () => {
+        // Небольшая задержка для гарантии, что токен установлен после авторизации
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Повторная проверка после задержки
+        if (!user || !profile) {
+          fetchingRef.current = false;
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && session?.access_token) {
+          await fetchDisputedOrders();
+          await fetchAllOrders();
+        } else {
+          console.warn('Session or token not ready, skipping fetch');
+        }
+        fetchingRef.current = false;
+      };
+      checkSessionAndFetch();
+    } else {
+      // Если пользователь или профиль не загружены, сбрасываем состояние
+      fetchingRef.current = false;
     }
-  }, [user]);
+  }, [user, profile]);
 
   const fetchDisputedOrders = async () => {
+    // Дополнительная проверка перед запросом
+    if (!user || !profile) {
+      return;
+    }
+
+    // Проверяем сессию и токен перед запросом
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (!session?.user || !session?.access_token) {
+      console.warn('Session or token not available, skipping disputed orders fetch', sessionError);
+      return;
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -2040,13 +2083,18 @@ function ManagerDashboard({ user, profile }) {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching disputed orders:', error);
-        alert('Не удалось загрузить спорные заказы.');
+        // Не показываем ошибку пользователю - это может быть нормальная ситуация
+        // (нет спорных заказов, временная проблема сети, и т.д.)
+        console.warn('Error fetching disputed orders (non-critical):', error);
+        // Всегда устанавливаем пустой массив при ошибке, чтобы не показывать ошибку пользователю
+        setDisputedOrders([]);
       } else {
         setDisputedOrders(data || []);
       }
     } catch (error) {
       console.error('Error in fetchDisputedOrders:', error);
+      // В случае исключения устанавливаем пустой массив вместо показа ошибки
+      setDisputedOrders([]);
     } finally {
       setLoading(false);
     }

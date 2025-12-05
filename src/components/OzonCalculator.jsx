@@ -30,7 +30,7 @@ const OzonCalculator = () => {
     fetchProfile();
   }, []);
 
-  const isAdmin = userProfile?.role === 'admin';
+  const canManageSettings = userProfile?.role === 'admin' || userProfile?.role === 'manager';
 
   // --- STATE: THEME (detecting from document) ---
   const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
@@ -722,32 +722,34 @@ const OzonCalculator = () => {
             </div>
 
             {/* 4. ТАРИФЫ (Свернутые + Разделенные) */}
-            <div className={`p-3 rounded-xl border ${theme.card} transition-colors`}>
-                <details className="text-sm">
-                    <summary className={`font-semibold ${theme.secondary} cursor-pointer flex items-center gap-2`}>
-                        <DollarSign size={14} /> Настройки тарифов
-                    </summary>
-                    <div className={`mt-3 space-y-3 pl-2 border-l-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
-                        {/* Фулфилмент */}
-                        <div className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'} mb-1`}>Фулфилмент (Мы)</div>
-                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Доставка до РФЦ (за короб)</span> <input className={`w-16 border rounded text-right text-xs p-1 font-bold ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.deliveryToRfc} onChange={e => setFfRates({...ffRates, deliveryToRfc: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Обработка (шт)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.processing} onChange={e => setFfRates({...ffRates, processing: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Спецификация (шт)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Сборка (кор)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxAssembly} onChange={e => setFfRates({...ffRates, boxAssembly: +e.target.value})} /></div>
-                        <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Короб (материал)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxMaterial} onChange={e => setFfRates({...ffRates, boxMaterial: +e.target.value})} /></div>
-                        
-                        {/* Разделитель */}
-                        <div className={`my-2 border-t-2 border-dashed ${isDarkMode ? 'border-blue-900' : 'border-blue-100'} relative`}>
-                             <span className={`absolute -top-2.5 left-0 ${theme.bg} pr-2 text-[10px] font-bold text-blue-500 uppercase`}>Озон (Маркетплейс)</span>
-                        </div>
-                        
-                        {/* Озон */}
-                        <div className="pt-1">
-                             <div className="flex justify-between items-center"><span className={`text-blue-800 dark:text-blue-300 text-xs`}>База логистики (до 5л)</span> <input className={`w-16 border rounded text-right text-xs p-1 text-blue-700 dark:text-blue-300 ${t.inputBg} ${isDarkMode ? 'border-blue-900' : 'border-blue-200'}`} value={ozonTariffs.logisticsBase} onChange={e => setOzonTariffs({...ozonTariffs, logisticsBase: +e.target.value})} /></div>
-                        </div>
-                    </div>
-                </details>
-            </div>
+            {canManageSettings && (
+              <div className={`p-3 rounded-xl border ${theme.card} transition-colors`}>
+                  <details className="text-sm">
+                      <summary className={`font-semibold ${theme.secondary} cursor-pointer flex items-center gap-2`}>
+                          <DollarSign size={14} /> Настройки тарифов
+                      </summary>
+                      <div className={`mt-3 space-y-3 pl-2 border-l-2 ${isDarkMode ? 'border-zinc-800' : 'border-slate-100'}`}>
+                          {/* Фулфилмент */}
+                          <div className={`text-[10px] uppercase font-bold ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'} mb-1`}>Фулфилмент (Мы)</div>
+                          <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Доставка до РФЦ (за короб)</span> <input className={`w-16 border rounded text-right text-xs p-1 font-bold ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.deliveryToRfc} onChange={e => setFfRates({...ffRates, deliveryToRfc: +e.target.value})} /></div>
+                          <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Обработка (шт)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.processing} onChange={e => setFfRates({...ffRates, processing: +e.target.value})} /></div>
+                          <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Спецификация (шт)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.specification} onChange={e => setFfRates({...ffRates, specification: +e.target.value})} /></div>
+                          <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Сборка (кор)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxAssembly} onChange={e => setFfRates({...ffRates, boxAssembly: +e.target.value})} /></div>
+                          <div className="flex justify-between items-center"><span className={`${theme.secondary} text-xs`}>Короб (материал)</span> <input className={`w-14 border rounded text-right text-xs p-1 ${t.inputBg} ${t.inputBorder} ${t.inputText}`} value={ffRates.boxMaterial} onChange={e => setFfRates({...ffRates, boxMaterial: +e.target.value})} /></div>
+                          
+                          {/* Разделитель */}
+                          <div className={`my-2 border-t-2 border-dashed ${isDarkMode ? 'border-blue-900' : 'border-blue-100'} relative`}>
+                               <span className={`absolute -top-2.5 left-0 ${theme.bg} pr-2 text-[10px] font-bold text-blue-500 uppercase`}>Озон (Маркетплейс)</span>
+                          </div>
+                          
+                          {/* Озон */}
+                          <div className="pt-1">
+                               <div className="flex justify-between items-center"><span className={`text-blue-800 dark:text-blue-300 text-xs`}>База логистики (до 5л)</span> <input className={`w-16 border rounded text-right text-xs p-1 text-blue-700 dark:text-blue-300 ${t.inputBg} ${isDarkMode ? 'border-blue-900' : 'border-blue-200'}`} value={ozonTariffs.logisticsBase} onChange={e => setOzonTariffs({...ozonTariffs, logisticsBase: +e.target.value})} /></div>
+                          </div>
+                      </div>
+                  </details>
+              </div>
+            )}
 
           </div>
 

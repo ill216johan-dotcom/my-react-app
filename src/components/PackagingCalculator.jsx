@@ -4,6 +4,7 @@ import {
   ChevronDown, Package, X, Truck, RotateCcw
 } from 'lucide-react';
 import CalculatorLayout from './CalculatorLayout.jsx';
+import { supabase } from '../supabaseClient.js';
 
 // --- КОНФИГУРАЦИЯ ПО УМОЛЧАНИЮ (Коэффициенты) ---
 const DEFAULT_SETTINGS = {
@@ -60,6 +61,33 @@ const LAYERS = {
 };
 
 export default function PackagingCalculator() {
+  // --- AUTH STATE (Role check) ---
+  const [userProfile, setUserProfile] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          setUserProfile(profile);
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const canManageSettings = userProfile?.role === 'admin' || userProfile?.role === 'manager';
+
   // --- STATE ---
   const [isDarkMode, setIsDarkMode] = useState(document.documentElement.classList.contains('dark'));
 
@@ -626,26 +654,28 @@ export default function PackagingCalculator() {
           </div>
 
           {/* SETTINGS PANEL */}
-          <div className={`rounded-xl shadow-lg border overflow-hidden ${isDarkMode ? 'bg-black border-neutral-800 text-neutral-300' : 'bg-gray-800 border-gray-700 text-white'}`}>
-            <button onClick={() => setShowSettings(!showSettings)} className="w-full p-4 flex justify-between items-center hover:bg-neutral-800 transition-colors">
-                <span className="font-bold text-yellow-400 text-sm flex items-center gap-2"><Settings size={16}/> Параметры WMS</span>
-                <ChevronDown size={16} className={`transform transition-transform ${showSettings ? 'rotate-180' : ''}`} />
-            </button>
-            
-            {showSettings && (
-              <div className="p-5 border-t border-neutral-800 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="bg-blue-900/10 p-2 rounded col-span-2">
-                    <h4 className="font-bold mb-2 text-blue-400">Базовые ставки (Услуга)</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>База: <input className="bg-neutral-800 w-full p-1 rounded text-white" type="number" value={settings.srv_base} onChange={e => setSettings({...settings, srv_base: +e.target.value})}/></div>
-                      <div>Нано: <input className="bg-neutral-800 w-full p-1 rounded text-white" type="number" value={settings.srv_base_nano} onChange={e => setSettings({...settings, srv_base_nano: +e.target.value})}/></div>
-                      <div>Плоск: <input className="bg-neutral-800 w-full p-1 rounded text-white" type="number" value={settings.srv_base_flat} onChange={e => setSettings({...settings, srv_base_flat: +e.target.value})}/></div>
+          {canManageSettings && (
+            <div className={`rounded-xl shadow-lg border overflow-hidden ${isDarkMode ? 'bg-black border-neutral-800 text-neutral-300' : 'bg-gray-800 border-gray-700 text-white'}`}>
+              <button onClick={() => setShowSettings(!showSettings)} className="w-full p-4 flex justify-between items-center hover:bg-neutral-800 transition-colors">
+                  <span className="font-bold text-yellow-400 text-sm flex items-center gap-2"><Settings size={16}/> Параметры WMS</span>
+                  <ChevronDown size={16} className={`transform transition-transform ${showSettings ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showSettings && (
+                <div className="p-5 border-t border-neutral-800 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="bg-blue-900/10 p-2 rounded col-span-2">
+                      <h4 className="font-bold mb-2 text-blue-400">Базовые ставки (Услуга)</h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>База: <input className="bg-neutral-800 w-full p-1 rounded text-white" type="number" value={settings.srv_base} onChange={e => setSettings({...settings, srv_base: +e.target.value})}/></div>
+                        <div>Нано: <input className="bg-neutral-800 w-full p-1 rounded text-white" type="number" value={settings.srv_base_nano} onChange={e => setSettings({...settings, srv_base_nano: +e.target.value})}/></div>
+                        <div>Плоск: <input className="bg-neutral-800 w-full p-1 rounded text-white" type="number" value={settings.srv_base_flat} onChange={e => setSettings({...settings, srv_base_flat: +e.target.value})}/></div>
+                      </div>
                     </div>
-                  </div>
-                  {/* Add other settings blocks as needed */}
-              </div>
-            )}
-          </div>
+                    {/* Add other settings blocks as needed */}
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
 
